@@ -191,17 +191,6 @@ When building CLIs, plugins, or tools:
 4. **Consistent interface:** Same patterns across all commands
 5. **Error elimination:** Design so common mistakes are impossible
 
-### Example: Good CLI Design
-
-```bash
-# Deep: one command handles the common case well
-swarm setup
-
-# Not shallow: doesn't require 10 flags for basic usage
-# Sensible defaults: picks reasonable models
-# Progressive: advanced users can customize later
-```
-
 ## Key Takeaways
 
 1. **Complexity is the enemy.** Every design decision should reduce it.

@@ -16,7 +16,7 @@ Build TypeScript command-line tools with Bun.
 
 CLIs are ideal for:
 - Developer tools and automation
-- Project-specific commands (`swarm`, `bd`, etc.)
+- Project-specific commands (`bd`, etc.)
 - Scripts that need arguments/flags
 - Tools that compose with shell pipelines
 

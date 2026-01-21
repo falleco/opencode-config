@@ -31,13 +31,7 @@ Read key files if needed to understand the implementation surface.
 
 ## Step 3: Break Into Subtasks
 
-If the bead is non-trivial, decompose it:
-
-```
-swarm_decompose with task="<bead description>", context="<codebase context you gathered>"
-```
-
-Or manually identify subtasks based on your analysis.
+Manually identify subtasks based on your analysis.
 
 ## Step 4: Estimate Complexity
 
@@ -98,11 +92,6 @@ Check for:
 ### Dependencies
 
 - [blocking bead or external dependency]
-
-### Recommendation
-
-[Should this be broken into separate beads? Done in a swarm? Needs more investigation first?]
-```
 
 ## Tips
 

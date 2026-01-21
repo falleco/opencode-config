@@ -1,6 +1,6 @@
 # TDD Patterns: Red-Green-Refactor
 
-**The non-negotiable discipline for swarm work.**
+**The non-negotiable discipline for agentic work.**
 
 > "Legacy code is simply code without tests." — Michael Feathers, _Working Effectively with Legacy Code_
 
@@ -182,40 +182,6 @@ const processor = new OrderProcessor(fakeDb);
 | **Subclass and Override**    | Can't change constructor signature   |
 | **Extract Method**           | Need to isolate behavior for testing |
 | **Introduce Static Setter**  | Global/singleton dependencies        |
-
----
-
-## TDD in Swarm Context
-
-### For New Features
-
-```
-1. Coordinator decomposes task
-2. Worker receives subtask
-3. Worker writes failing test FIRST
-4. Worker implements until green
-5. Worker refactors
-6. swarm_complete runs verification gate
-```
-
-### For Bug Fixes
-
-```
-1. Write a test that reproduces the bug (RED)
-2. Fix the bug (GREEN)
-3. Refactor if needed
-4. The test prevents regression forever
-```
-
-### For Refactoring
-
-```
-1. Write characterization tests for existing behavior
-2. Verify tests pass (they document current state)
-3. Refactor in small steps
-4. Run tests after EVERY change
-5. If tests fail, you broke something — revert
-```
 
 ---
 

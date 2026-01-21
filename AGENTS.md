@@ -36,30 +36,11 @@ Fix all lint errors before commit. No “pre-existing” excuses.
 
 Prefer plugin tools over raw CLI/MCP.
 
-1. `hive_*`, `swarm_*`, `structured_*`, `swarmmail_*`
-2. Read/Edit tools
-3. ast-grep
-4. Glob/Grep
-5. Task subagents
-6. Bash (system commands only)
-
----
-
-## Swarm Workflow
-
-- 3+ files, features, refactors, or bug fix + tests → use `/swarm`.
-- Initialize before file edits with `swarmmail_init`.
-- Reserve files before edits with `swarmmail_reserve`.
-- Report progress every ~30 min via `swarmmail_send`.
-- If blocked >5 minutes, message coordinator with `swarmmail_send(importance="high")`.
-- Complete with `swarm_complete` (not manual close).
-
-## Hive End of Session
-
-- For swarm tasks: `swarm_complete`.
-- For non-swarm tasks: `hive_close`, then `hive_sync`, then `git push`.
-- Verify clean `git status`.
-- Check `hive_ready` for next work.
+1. Read/Edit tools
+2. ast-grep
+3. Glob/Grep
+4. Task subagents
+5. Bash (system commands only)
 
 ---
 

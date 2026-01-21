@@ -947,6 +947,6 @@ Currently, plugin tools are limited to returning a single string result at compl
 - Implement `Tool.define()` wrapper for our custom tools
 - Add FileTime-like tracking for beads state
 - Create Permission patterns for Agent Mail reservations
-- ~~Add streaming progress to swarm operations~~ (NOT POSSIBLE - no ctx.metadata)
+- ~~Add streaming progress to operations~~ (NOT POSSIBLE - no ctx.metadata)
 - Implement mtime-based sorting in cass search results
-- **Workaround**: Use Agent Mail for progress reporting in swarm tools
+- **Workaround**: Use Agent Mail for progress reporting in tools

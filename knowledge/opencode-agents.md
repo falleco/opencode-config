@@ -46,11 +46,6 @@ const result = await SessionPrompt.prompt({
 - **Cancellation**: Parent abort signal propagates to child
 - **Result format**: Returns text + `<task_metadata>` with `session_id` for continuation
 
-**Comparison to our swarm:**
-
-- OpenCode: Single task tool, generic agent selection
-- Us: Specialized `swarm_spawn_subtask` with BeadTree decomposition, Agent Mail coordination, file reservations
-
 ## 2. Model Routing
 
 ### Agent Model Selection: `packages/opencode/src/agent/agent.ts`
@@ -122,11 +117,6 @@ export const Assistant = z.object({
 - Agent must explicitly include results in final text response
 - Summary metadata extracted from completed tool parts
 
-**Comparison to our swarm:**
-
-- OpenCode: Implicit isolation via sessions, manual result passing
-- Us: Explicit Agent Mail messages, file reservations, swarm coordination metadata
-
 ## 4. Built-in Agent Types
 
 ### Defined in `packages/opencode/src/agent/agent.ts` lines 103-169
@@ -184,8 +174,6 @@ permission: {
 
 | Agent             | Mode       | Model             | Tool Restrictions                                                                  |
 | ----------------- | ---------- | ----------------- | ---------------------------------------------------------------------------------- |
-| **swarm/worker**  | `subagent` | claude-sonnet-4-5 | _(none specified - inherits default)_                                              |
-| **swarm/planner** | `subagent` | claude-opus-4-5   | _(none specified)_                                                                 |
 | **archaeologist** | `subagent` | claude-sonnet-4-5 | **Read-only**: write/edit false, limited bash (rg, git log/show/blame, tree, find) |
 
 ## 5. Response Processing
@@ -224,11 +212,6 @@ const summary = messages
     },
   }));
 ```
-
-**Comparison to our swarm:**
-
-- OpenCode: Generic stream processor for all agents
-- Us: `swarm_complete` custom handling with UBS scan, reservation release, outcome recording
 
 ## 6. Configuration & Extension
 
@@ -286,20 +269,7 @@ permission:
 
 **Merge behavior**: Deep merge with plugin array concatenation
 
-## 7. Key Differences: OpenCode vs Our Swarm
-
-| Aspect                | OpenCode                          | Our Swarm                                      |
-| --------------------- | --------------------------------- | ---------------------------------------------- |
-| **Spawning**          | Generic Task tool                 | Specialized swarm tools + BeadTree             |
-| **Coordination**      | Implicit via sessions             | Explicit Agent Mail messages                   |
-| **File conflicts**    | Not detected                      | Pre-spawn validation + reservations            |
-| **Model routing**     | Config override or inherit        | Explicit frontmatter                           |
-| **Tool restrictions** | Boolean map + permission patterns | Boolean map + bash patterns                    |
-| **Result passing**    | Manual text summary               | Structured swarm_complete                      |
-| **Learning**          | None                              | Outcome tracking + pattern maturity            |
-| **Built-in agents**   | 4 (general, explore, build, plan) | 3 (swarm/worker, swarm/planner, archaeologist) |
-
-## 8. Implementation Insights
+## 7. Implementation Insights
 
 ### What OpenCode Does Well
 
@@ -309,23 +279,14 @@ permission:
 4. **Permission granularity**: Wildcard patterns for bash commands
 5. **Session hierarchy**: Clear parent/child tracking
 
-### What Our Swarm Does Better
-
-1. **Pre-spawn validation**: Detects file conflicts before spawning
-2. **Structured coordination**: Agent Mail vs manual result passing
-3. **Learning integration**: Outcome recording, pattern maturity
-4. **Bug scanning**: Auto UBS scan on completion
-5. **Explicit decomposition**: BeadTree JSON vs ad-hoc task descriptions
-
 ### Opportunities
 
 1. **Adopt doom loop detection**: Track repeated tool calls with same args
 2. **Stream progress metadata**: Real-time updates from workers to planner
-3. **Session hierarchy**: Consider `parentID` tracking for swarm sessions
-4. **Permission patterns**: Bash wildcard patterns for finer control
-5. **Built-in explore agent**: Fast read-only search specialist
+3. **Permission patterns**: Bash wildcard patterns for finer control
+4. **Built-in explore agent**: Fast read-only search specialist
 
-## 9. Code Paths
+## 8. Code Paths
 
 ### Task Spawning
 
@@ -360,9 +321,9 @@ Tool call
       → Agent.permission.doom_loop: "ask"|"deny"|"allow"
 ```
 
-## 10. Open Questions
+## 9. Open Questions
 
-1. **How do they handle swarm-like parallelism?**
+1. **How do they handle parallelism?**
    - Answer: Multiple Task tool calls in single message (line 19 in task.txt: "Launch multiple agents concurrently")
 
 2. **Do they track learning/outcomes?**
@@ -378,15 +339,13 @@ Tool call
 
 ### For Immediate Adoption
 
-1. ✅ **Doom loop detection**: Add to swarm_complete
-2. ✅ **Permission wildcards**: Enhance archaeologist bash permissions
-3. ✅ **Explore agent**: Create fast read-only search specialist
+1. ✅ **Permission wildcards**: Enhance archaeologist bash permissions
+2. ✅ **Explore agent**: Create fast read-only search specialist
 
 ### For Future Consideration
 
-1. **Session hierarchy**: Add `parentID` to swarm sessions for traceability
-2. **Stream metadata**: Real-time worker progress via Agent Mail streaming
-3. **Tool result aggregation**: Summary format like OpenCode's tool state tracking
+1. **Stream metadata**: Real-time worker progress via Agent Mail streaming
+2. **Tool result aggregation**: Summary format like OpenCode's tool state tracking
 
 ### Not Needed (We Do Better)
 

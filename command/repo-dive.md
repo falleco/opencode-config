@@ -201,7 +201,6 @@ repo-autopsy_cleanup("all")
 ## Examples
 
 ```
-/repo-dive openai/swarm
 /repo-dive vercel/ai streaming
 /repo-dive shadcn/ui component patterns
 /repo-dive trpc/trpc type inference

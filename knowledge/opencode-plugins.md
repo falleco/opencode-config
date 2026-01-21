@@ -200,11 +200,11 @@ Example:
 
 ```markdown
 ---
-agent: swarm/planner
+agent: api-backend
 description: Decompose task into parallel beads
 ---
 
-You are the swarm coordinator...
+You are the API specialist..
 ```
 
 ### Command Discovery
@@ -314,11 +314,6 @@ async function loadAgent(dir: string) {
 - `subagent`: Available via Task tool or `/agent` command
 - `primary`: Available as primary chat agent
 - `all`: Both
-
-**Nested Agents:**
-
-- `agent/swarm/planner.md` → name = `swarm/planner`
-- Allows organizational hierarchy
 
 ### Mode vs Agent
 
@@ -478,7 +473,7 @@ const state = Instance.state(async () => {
 2. **No Auth Hooks**: Can't extend authentication (e.g., custom OAuth providers)
 3. **No Tool Lifecycle Hooks**: Can't intercept tool execution (before/after)
 4. **No Event Bus**: OpenCode has `Bus.subscribeAll()` for plugin event subscription
-5. **Flat Agent Structure**: No nested agent directories (`agent/swarm/planner.md`)
+5. **Flat Agent Structure**: No nested agent directories (`agent/(*).md`)
 
 ### Opportunities for Improvement
 
@@ -489,7 +484,6 @@ const state = Instance.state(async () => {
 
 2. **Nested Agents**:
    - Change glob from `agent/*.md` to `agent/**/*.md`
-   - Use folder structure for namespacing: `agent/swarm/planner.md` → `swarm/planner`
 
 3. **Tool Lifecycle Hooks**:
    - Wrap tool execute in `tool/registry.ts` to call plugin hooks
@@ -578,7 +572,6 @@ Built-in agents are hardcoded, user agents override/extend.
 2. **Nested Agent Support**
    - Update glob pattern to `agent/**/*.md`
    - Update agent name extraction logic
-   - Test with `agent/swarm/planner.md`
 
 3. **Smart Tool Naming**
    - Update tool registry to check if export is `default`

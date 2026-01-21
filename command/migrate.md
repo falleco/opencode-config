@@ -54,7 +54,6 @@ rg --count "<from-pattern>" --type-add 'code:*.{ts,tsx,js,jsx,mjs,cjs}' -t code
 If more than 10 files affected, consider:
 
 - Breaking into batches
-- Using swarm for parallel execution
 - Getting confirmation before proceeding
 
 ## Step 5: Execute Migration

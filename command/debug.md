@@ -263,9 +263,7 @@ Use `/debug-plus` instead of `/debug` when:
 
 `/debug-plus` extends this command with:
 
-- Swarm integration for parallel investigation
 - Automatic prevention pattern matching via `knowledge/prevention-patterns.md`
 - Prevention bead creation for follow-up work
-- Optional swarm spawning for codebase-wide preventive fixes
 
 For simple single-file bugs, `/debug` is faster. For anything systemic, use `/debug-plus`.

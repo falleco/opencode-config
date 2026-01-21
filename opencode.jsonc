@@ -21,6 +21,10 @@
 		}
 	},
 
+	// == Sharing ==
+	// WARNING: this is a security risk, do not share sessions with anyone automatically.
+	"share": "manual",
+
 	// === Instructions ===
 	// AGENTS.md auto-loaded from ~/.config/opencode/ and repo root
 	// Knowledge files (knowledge/*.md) are loaded on-demand via @path references
@@ -47,8 +51,37 @@
 		}
 	},
 
-	// === MCP Servers ===
+	/*********************************
+	 ********** MCP Servers **********
+	 *********************************/
 	"mcp": {
+		"docker": {
+			"type": "local",
+			"command": ["uvx", "docker-mcp"],
+			"enabled": false
+		},
+		"kubernetes": {
+			"type": "local",
+			"command": ["npx", "-y", "kubernetes-mcp-server@latest"],
+			"enabled": false
+		},
+		"github": {
+			"type": "local",
+			"command": [
+				"docker",
+				"run",
+				"-i",
+				"--rm",
+				"--pull=always",
+				"-e",
+				"GITHUB_PERSONAL_ACCESS_TOKEN",
+				"ghcr.io/github/github-mcp-server"
+			],
+			"environment": {
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+			},
+			"enabled": false
+		},
 		"next-devtools": {
 			"type": "local",
 			"command": ["npx", "-y", "next-devtools-mcp@latest"]
@@ -69,7 +102,11 @@
 		}
 	},
 
-	// === Agent Overrides ===
+	"plugin": ["opencode-beads"],
+
+	/*********************************
+	 ******** Agents Override ********
+	 *********************************/
 	"agent": {
 		// Build agent - full capability with slight creativity
 		"build": {
@@ -77,7 +114,7 @@
 		},
 		// Plan agent - read-only analysis, no file writes
 		"plan": {
-			"model": "openai/gpt-5.2-codex", // Opus for planning (cheaper)
+			"model": "openai/gpt-5.2-codex",
 			"temperature": 0.1,
 			"tools": {
 				"write": false,
@@ -96,9 +133,7 @@
 					"wc *": "allow",
 					"head *": "allow",
 					"tail *": "allow",
-					"pnpm exec tsc*": "allow",
-					"pnpm run lint*": "allow",
-					"pnpm test*": "allow",
+					"yarn run*": "allow",
 					"*": "deny"
 				}
 			}

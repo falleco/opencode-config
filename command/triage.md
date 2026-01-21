@@ -54,7 +54,7 @@ Analyze the request and classify into one of these categories:
 ### Category: FEATURE
 
 **Signals:** "add", "implement", "create", "build", "new"
-**Route to:** `/swarm` (if complex) or direct implementation
+**Route to:** direct implementation
 
 ### Category: MULTI_TASK
 
@@ -140,7 +140,7 @@ Always explain the routing:
 | "review this PR"           | reviewer         |
 | "rename X to Y everywhere" | refactorer       |
 | "fix the type error in X"  | /debug or direct |
-| "add feature X"            | /swarm or direct |
+| "add feature X"            | direct |
 | "do A, B, and C"           | /parallel        |
 | "what's the status"        | beads agent      |
 | "clean up all the PRs"     | /fix-all         |
