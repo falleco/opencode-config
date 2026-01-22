@@ -47,15 +47,15 @@ export function truncateOutput(
  */
 export function formatError(error: unknown): string {
   if (error instanceof Error) {
-    const stackLines = error.stack?.split("\n").slice(0, 5).join("\n") || "";
-    return `${error.name}: ${error.message}${stackLines ? `\n\nStack trace (first 5 lines):\n${stackLines}` : ""}`;
+    const stackLines = error.stack?.split('\n').slice(0, 5).join('\n') || '';
+    return `${error.name}: ${error.message}${stackLines ? `\n\nStack trace (first 5 lines):\n${stackLines}` : ''}`;
   }
 
-  if (typeof error === "string") {
+  if (typeof error === 'string') {
     return `Error: ${error}`;
   }
 
-  if (error && typeof error === "object") {
+  if (error && typeof error === 'object') {
     try {
       return `Error: ${JSON.stringify(error, null, 2)}`;
     } catch {

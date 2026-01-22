@@ -1,15 +1,15 @@
-import { tool } from "@opencode-ai/plugin";
-import { $ } from "bun";
-import { existsSync, statSync } from "fs";
-import { join } from "path";
-import { truncateOutput, MAX_OUTPUT } from "./tool-utils";
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { tool } from '@opencode-ai/plugin';
+import { $ } from 'bun';
+import { truncateOutput } from './tool-utils';
 
 /**
  * Clone a repo locally and perform deep analysis
  * Uses the full local toolchain: rg, ast-grep, git, etc.
  */
 
-const AUTOPSY_DIR = join(process.env.HOME || "~", ".opencode-autopsy");
+const AUTOPSY_DIR = join(process.env.HOME || '~', '.opencode-autopsy');
 
 /** Cache duration in ms - skip fetch if repo was updated within this time */
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -21,20 +21,21 @@ function parseRepoUrl(
   input: string,
 ): { owner: string; repo: string; url: string } | null {
   // Handle: owner/repo, github.com/owner/repo, https://github.com/owner/repo, git@github.com:owner/repo
-  let owner: string, repo: string;
+  let owner: string;
+  let repo: string;
 
-  if (input.includes("git@")) {
-    const match = input.match(/git@github\.com:([^\/]+)\/(.+?)(?:\.git)?$/);
+  if (input.includes('git@')) {
+    const match = input.match(/git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
     if (!match) return null;
     owner = match[1];
     repo = match[2];
   } else {
     const match = input.match(
-      /(?:(?:https?:\/\/)?github\.com\/)?([^\/]+)\/([^\/\s]+)/i,
+      /(?:(?:https?:\/\/)?github\.com\/)?([^/]+)\/([^/\s]+)/i,
     );
     if (!match) return null;
     owner = match[1];
-    repo = match[2].replace(/\.git$/, "");
+    repo = match[2].replace(/\.git$/, '');
   }
 
   return {
@@ -52,19 +53,19 @@ async function ensureRepo(
   { path: string; owner: string; repo: string; cached: boolean } | string
 > {
   const parsed = parseRepoUrl(repoInput);
-  if (!parsed) return "Invalid repo format. Use: owner/repo or GitHub URL";
+  if (!parsed) return 'Invalid repo format. Use: owner/repo or GitHub URL';
 
   const { owner, repo, url } = parsed;
   const repoPath = join(AUTOPSY_DIR, owner, repo);
   const cacheKey = `${owner}/${repo}`;
 
   // Check abort before starting
-  if (signal?.aborted) return "Operation cancelled";
+  if (signal?.aborted) return 'Operation cancelled';
 
   // Ensure autopsy directory exists
   await $`mkdir -p ${AUTOPSY_DIR}/${owner}`.quiet();
 
-  if (signal?.aborted) return "Operation cancelled";
+  if (signal?.aborted) return 'Operation cancelled';
 
   if (existsSync(repoPath)) {
     // Check if we can skip fetch (cache hit)
@@ -79,12 +80,12 @@ async function ensureRepo(
     // Update existing repo
     try {
       await $`git -C ${repoPath} fetch --all --prune`.quiet();
-      if (signal?.aborted) return "Operation cancelled";
+      if (signal?.aborted) return 'Operation cancelled';
       await $`git -C ${repoPath} reset --hard origin/HEAD`.quiet();
       lastFetchTime.set(cacheKey, Date.now());
     } catch {
       // If fetch fails, re-clone
-      if (signal?.aborted) return "Operation cancelled";
+      if (signal?.aborted) return 'Operation cancelled';
       await $`rm -rf ${repoPath}`.quiet();
       await $`git clone --depth 100 ${url} ${repoPath}`.quiet();
       lastFetchTime.set(cacheKey, Date.now());
@@ -95,27 +96,27 @@ async function ensureRepo(
     lastFetchTime.set(cacheKey, Date.now());
   }
 
-  if (signal?.aborted) return "Operation cancelled";
+  if (signal?.aborted) return 'Operation cancelled';
 
   return { path: repoPath, owner, repo, cached: false };
 }
 
 export const clone = tool({
   description:
-    "Clone/update a GitHub repo locally for deep analysis. Returns the local path.",
+    'Clone/update a GitHub repo locally for deep analysis. Returns the local path.',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
     refresh: tool.schema
       .boolean()
       .optional()
-      .describe("Force refresh even if cached"),
+      .describe('Force refresh even if cached'),
   },
   async execute({ repo, refresh = false }, ctx) {
     try {
       const result = await ensureRepo(repo, ctx?.abort, refresh);
-      if (typeof result === "string") return result;
+      if (typeof result === 'string') return result;
 
-      const cacheStatus = result.cached ? "📦 (cached)" : "🔄 (fetched)";
+      const cacheStatus = result.cached ? '📦 (cached)' : '🔄 (fetched)';
 
       // Get basic stats in parallel for speed
       const [fileCount, languages] = await Promise.all([
@@ -144,15 +145,15 @@ Use other repo-autopsy tools to analyze:
 });
 
 export const structure = tool({
-  description: "Get detailed directory structure of cloned repo",
+  description: 'Get detailed directory structure of cloned repo',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
-    path: tool.schema.string().optional().describe("Subpath to explore"),
-    depth: tool.schema.number().optional().describe("Max depth (default: 4)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
+    path: tool.schema.string().optional().describe('Subpath to explore'),
+    depth: tool.schema.number().optional().describe('Max depth (default: 4)'),
   },
-  async execute({ repo, path = "", depth = 4 }, ctx) {
+  async execute({ repo, path = '', depth = 4 }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     const targetPath = path ? join(result.path, path) : result.path;
 
@@ -168,10 +169,10 @@ export const structure = tool({
 });
 
 export const search = tool({
-  description: "Ripgrep search in cloned repo - full regex power",
+  description: 'Ripgrep search in cloned repo - full regex power',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
-    pattern: tool.schema.string().describe("Regex pattern to search"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
+    pattern: tool.schema.string().describe('Regex pattern to search'),
     fileGlob: tool.schema
       .string()
       .optional()
@@ -179,34 +180,34 @@ export const search = tool({
     context: tool.schema
       .number()
       .optional()
-      .describe("Lines of context (default: 2)"),
+      .describe('Lines of context (default: 2)'),
     maxResults: tool.schema
       .number()
       .optional()
-      .describe("Max results (default: 50)"),
+      .describe('Max results (default: 50)'),
   },
   async execute(
     { repo, pattern, fileGlob, context = 2, maxResults = 50 },
     ctx,
   ) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     try {
-      const globArg = fileGlob ? `--glob '${fileGlob}'` : "";
+      const globArg = fileGlob ? `--glob '${fileGlob}'` : '';
       const cmd = `rg '${pattern}' ${result.path} -C ${context} ${globArg} --max-count ${maxResults} -n --color never 2>/dev/null | head -500`;
       const output = await $`sh -c ${cmd}`.text();
-      return truncateOutput(output.trim() || "No matches found");
+      return truncateOutput(output.trim() || 'No matches found');
     } catch {
-      return "No matches found";
+      return 'No matches found';
     }
   },
 });
 
 export const ast = tool({
-  description: "AST-grep structural search in cloned repo",
+  description: 'AST-grep structural search in cloned repo',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
     pattern: tool.schema
       .string()
       .describe(
@@ -215,17 +216,17 @@ export const ast = tool({
     lang: tool.schema
       .string()
       .optional()
-      .describe("Language: ts, tsx, js, py, go, rust (default: auto)"),
+      .describe('Language: ts, tsx, js, py, go, rust (default: auto)'),
   },
   async execute({ repo, pattern, lang }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     try {
-      const langArg = lang ? `--lang ${lang}` : "";
+      const langArg = lang ? `--lang ${lang}` : '';
       const output =
         await $`ast-grep --pattern ${pattern} ${langArg} ${result.path} 2>/dev/null | head -200`.text();
-      return output.trim() || "No matches found";
+      return output.trim() || 'No matches found';
     } catch (e) {
       return `ast-grep failed (installed?): ${e}`;
     }
@@ -233,18 +234,18 @@ export const ast = tool({
 });
 
 export const deps = tool({
-  description: "Analyze dependencies in cloned repo",
+  description: 'Analyze dependencies in cloned repo',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
   },
   async execute({ repo }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     const outputs: string[] = [];
 
     // Node.js
-    const pkgPath = join(result.path, "package.json");
+    const pkgPath = join(result.path, 'package.json');
     if (existsSync(pkgPath)) {
       try {
         const pkg = await Bun.file(pkgPath).json();
@@ -254,56 +255,56 @@ export const deps = tool({
         outputs.push(`## Node.js (package.json)
 
 Dependencies (${Object.keys(pkg.dependencies || {}).length}):
-${deps.join(", ")}${Object.keys(pkg.dependencies || {}).length > 20 ? " ..." : ""}
+${deps.join(', ')}${Object.keys(pkg.dependencies || {}).length > 20 ? ' ...' : ''}
 
 DevDependencies (${Object.keys(pkg.devDependencies || {}).length}):
-${devDeps.join(", ")}${Object.keys(pkg.devDependencies || {}).length > 15 ? " ..." : ""}`);
+${devDeps.join(', ')}${Object.keys(pkg.devDependencies || {}).length > 15 ? ' ...' : ''}`);
       } catch {}
     }
 
     // Python
-    const pyprojectPath = join(result.path, "pyproject.toml");
-    const requirementsPath = join(result.path, "requirements.txt");
+    const pyprojectPath = join(result.path, 'pyproject.toml');
+    const requirementsPath = join(result.path, 'requirements.txt');
 
     if (existsSync(requirementsPath)) {
       const reqs = await Bun.file(requirementsPath).text();
       const deps = reqs
-        .split("\n")
-        .filter((l) => l.trim() && !l.startsWith("#"))
+        .split('\n')
+        .filter((l) => l.trim() && !l.startsWith('#'))
         .slice(0, 20);
-      outputs.push(`## Python (requirements.txt)\n${deps.join("\n")}`);
+      outputs.push(`## Python (requirements.txt)\n${deps.join('\n')}`);
     } else if (existsSync(pyprojectPath)) {
       const content = await Bun.file(pyprojectPath).text();
       outputs.push(`## Python (pyproject.toml)\n${content.slice(0, 1500)}...`);
     }
 
     // Go
-    const goModPath = join(result.path, "go.mod");
+    const goModPath = join(result.path, 'go.mod');
     if (existsSync(goModPath)) {
       const content = await Bun.file(goModPath).text();
       outputs.push(`## Go (go.mod)\n${content.slice(0, 1500)}`);
     }
 
     // Rust
-    const cargoPath = join(result.path, "Cargo.toml");
+    const cargoPath = join(result.path, 'Cargo.toml');
     if (existsSync(cargoPath)) {
       const content = await Bun.file(cargoPath).text();
       outputs.push(`## Rust (Cargo.toml)\n${content.slice(0, 1500)}`);
     }
 
-    return outputs.length ? outputs.join("\n\n") : "No dependency files found";
+    return outputs.length ? outputs.join('\n\n') : 'No dependency files found';
   },
 });
 
 export const hotspots = tool({
   description:
-    "Find code hotspots - most changed files, largest files, most complex",
+    'Find code hotspots - most changed files, largest files, most complex',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
   },
   async execute({ repo }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     // Run all analyses in parallel for speed
     const [churnResult, largestResult, todosResult, recentResult] =
@@ -320,36 +321,36 @@ export const hotspots = tool({
 
     const outputs: string[] = [];
 
-    if (churnResult.status === "fulfilled" && churnResult.value.trim()) {
+    if (churnResult.status === 'fulfilled' && churnResult.value.trim()) {
       outputs.push(
         `## Most Changed Files (Git Churn)\n${churnResult.value.trim()}`,
       );
     }
-    if (largestResult.status === "fulfilled" && largestResult.value.trim()) {
+    if (largestResult.status === 'fulfilled' && largestResult.value.trim()) {
       outputs.push(
         `## Largest Files (by lines)\n${largestResult.value.trim()}`,
       );
     }
-    if (todosResult.status === "fulfilled" && todosResult.value.trim()) {
+    if (todosResult.status === 'fulfilled' && todosResult.value.trim()) {
       outputs.push(`## Most TODOs/FIXMEs\n${todosResult.value.trim()}`);
     }
-    if (recentResult.status === "fulfilled" && recentResult.value.trim()) {
+    if (recentResult.status === 'fulfilled' && recentResult.value.trim()) {
       outputs.push(`## Recent Commits\n${recentResult.value.trim()}`);
     }
 
-    return truncateOutput(outputs.join("\n\n"));
+    return truncateOutput(outputs.join('\n\n'));
   },
 });
 
 export const stats = tool({
   description:
-    "Code statistics - lines of code, languages, file counts (uses tokei)",
+    'Code statistics - lines of code, languages, file counts (uses tokei)',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
   },
   async execute({ repo }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     try {
       const stats =
@@ -362,13 +363,13 @@ export const stats = tool({
 });
 
 export const secrets = tool({
-  description: "Scan for leaked secrets in repo (uses gitleaks)",
+  description: 'Scan for leaked secrets in repo (uses gitleaks)',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
   },
   async execute({ repo }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     try {
       // gitleaks returns non-zero if it finds secrets, so we catch
@@ -377,16 +378,16 @@ export const secrets = tool({
           .text()
           .catch((e) => e.stdout || e.message);
 
-      if (output.includes("no leaks found")) {
-        return "✓ No secrets detected";
+      if (output.includes('no leaks found')) {
+        return '✓ No secrets detected';
       }
 
       // Truncate if too long
       if (output.length > 5000) {
-        return output.slice(0, 5000) + "\n\n... (truncated)";
+        return `${output.slice(0, 5000)}\n\n... (truncated)`;
       }
 
-      return output.trim() || "Scan complete (check output)";
+      return output.trim() || 'Scan complete (check output)';
     } catch (e) {
       return `gitleaks failed: ${e}`;
     }
@@ -394,14 +395,14 @@ export const secrets = tool({
 });
 
 export const find = tool({
-  description: "Fast file finding with fd (better than find)",
+  description: 'Fast file finding with fd (better than find)',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
-    pattern: tool.schema.string().describe("File name pattern (regex)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
+    pattern: tool.schema.string().describe('File name pattern (regex)'),
     type: tool.schema
-      .enum(["f", "d", "l", "x"])
+      .enum(['f', 'd', 'l', 'x'])
       .optional()
-      .describe("Type: f=file, d=dir, l=symlink, x=executable"),
+      .describe('Type: f=file, d=dir, l=symlink, x=executable'),
     extension: tool.schema
       .string()
       .optional()
@@ -409,24 +410,24 @@ export const find = tool({
   },
   async execute({ repo, pattern, type, extension }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     try {
-      const typeArg = type ? `-t ${type}` : "";
-      const extArg = extension ? `-e ${extension}` : "";
+      const typeArg = type ? `-t ${type}` : '';
+      const extArg = extension ? `-e ${extension}` : '';
       const output =
         await $`fd ${pattern} ${result.path} ${typeArg} ${extArg} -E .git -E node_modules 2>/dev/null | head -50`.text();
-      return output.trim() || "No matches";
+      return output.trim() || 'No matches';
     } catch {
-      return "No matches";
+      return 'No matches';
     }
   },
 });
 
 export const exports_map = tool({
-  description: "Map public API - all exports from a repo",
+  description: 'Map public API - all exports from a repo',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
     entryPoint: tool.schema
       .string()
       .optional()
@@ -434,23 +435,23 @@ export const exports_map = tool({
   },
   async execute({ repo, entryPoint }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     const outputs: string[] = [];
 
     // Find main entry points if not specified
     if (!entryPoint) {
       const possibleEntries = [
-        "src/index.ts",
-        "src/index.tsx",
-        "src/index.js",
-        "lib/index.ts",
-        "lib/index.js",
-        "index.ts",
-        "index.js",
-        "src/main.ts",
-        "src/main.js",
-        "mod.ts", // Deno
+        'src/index.ts',
+        'src/index.tsx',
+        'src/index.js',
+        'lib/index.ts',
+        'lib/index.js',
+        'index.ts',
+        'index.js',
+        'src/main.ts',
+        'src/main.js',
+        'mod.ts', // Deno
       ];
 
       for (const entry of possibleEntries) {
@@ -469,15 +470,15 @@ export const exports_map = tool({
         $`rg "^export \\* from|^export \\{[^}]+\\} from" ${result.path} --glob '*.ts' --glob '*.tsx' --glob '*.js' 2>/dev/null | head -30`.text(),
       ]);
 
-    if (namedResult.status === "fulfilled" && namedResult.value.trim()) {
+    if (namedResult.status === 'fulfilled' && namedResult.value.trim()) {
       outputs.push(`## Named Exports\n${namedResult.value.trim()}`);
     }
-    if (defaultResult.status === "fulfilled" && defaultResult.value.trim()) {
+    if (defaultResult.status === 'fulfilled' && defaultResult.value.trim()) {
       outputs.push(
         `## Files with Default Exports\n${defaultResult.value.trim()}`,
       );
     }
-    if (reexportResult.status === "fulfilled" && reexportResult.value.trim()) {
+    if (reexportResult.status === 'fulfilled' && reexportResult.value.trim()) {
       outputs.push(`## Re-exports\n${reexportResult.value.trim()}`);
     }
 
@@ -487,29 +488,29 @@ export const exports_map = tool({
       if (existsSync(entryPath)) {
         const content = await Bun.file(entryPath).text();
         outputs.unshift(
-          `## Entry Point: ${entryPoint}\n\`\`\`typescript\n${content.slice(0, 2000)}${content.length > 2000 ? "\n// ... truncated" : ""}\n\`\`\``,
+          `## Entry Point: ${entryPoint}\n\`\`\`typescript\n${content.slice(0, 2000)}${content.length > 2000 ? '\n// ... truncated' : ''}\n\`\`\``,
         );
       }
     }
 
-    return truncateOutput(outputs.join("\n\n") || "No exports found");
+    return truncateOutput(outputs.join('\n\n') || 'No exports found');
   },
 });
 
 export const file = tool({
-  description: "Read a file from cloned repo with optional line range",
+  description: 'Read a file from cloned repo with optional line range',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
-    path: tool.schema.string().describe("File path within repo"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
+    path: tool.schema.string().describe('File path within repo'),
     startLine: tool.schema
       .number()
       .optional()
-      .describe("Start line (1-indexed)"),
-    endLine: tool.schema.number().optional().describe("End line"),
+      .describe('Start line (1-indexed)'),
+    endLine: tool.schema.number().optional().describe('End line'),
   },
   async execute({ repo, path, startLine, endLine }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     const filePath = join(result.path, path);
 
@@ -519,26 +520,26 @@ export const file = tool({
 
     try {
       const content = await Bun.file(filePath).text();
-      const lines = content.split("\n");
+      const lines = content.split('\n');
 
       if (startLine || endLine) {
         const start = (startLine || 1) - 1;
         const end = endLine || lines.length;
         const slice = lines.slice(start, end);
-        return slice.map((l, i) => `${start + i + 1}: ${l}`).join("\n");
+        return slice.map((l, i) => `${start + i + 1}: ${l}`).join('\n');
       }
 
       // Add line numbers and truncate if needed
       if (lines.length > 500) {
-        return (
-          lines
-            .slice(0, 500)
-            .map((l, i) => `${i + 1}: ${l}`)
-            .join("\n") + `\n\n... (${lines.length - 500} more lines)`
-        );
+        const prefix = lines
+          .slice(0, 500)
+          .map((l, i) => `${i + 1}: ${l}`)
+          .join('\n');
+        const suffix = `\n\n... (${lines.length - 500} more lines)`;
+        return prefix + suffix;
       }
 
-      return lines.map((l, i) => `${i + 1}: ${l}`).join("\n");
+      return lines.map((l, i) => `${i + 1}: ${l}`).join('\n');
     } catch (e) {
       return `Failed to read file: ${e}`;
     }
@@ -546,23 +547,23 @@ export const file = tool({
 });
 
 export const blame = tool({
-  description: "Git blame for a file - who wrote what",
+  description: 'Git blame for a file - who wrote what',
   args: {
-    repo: tool.schema.string().describe("GitHub repo (owner/repo or URL)"),
-    path: tool.schema.string().describe("File path within repo"),
-    startLine: tool.schema.number().optional().describe("Start line"),
-    endLine: tool.schema.number().optional().describe("End line"),
+    repo: tool.schema.string().describe('GitHub repo (owner/repo or URL)'),
+    path: tool.schema.string().describe('File path within repo'),
+    startLine: tool.schema.number().optional().describe('Start line'),
+    endLine: tool.schema.number().optional().describe('End line'),
   },
   async execute({ repo, path, startLine, endLine }, ctx) {
     const result = await ensureRepo(repo, ctx?.abort);
-    if (typeof result === "string") return result;
+    if (typeof result === 'string') return result;
 
     try {
       const lineRange =
-        startLine && endLine ? `-L ${startLine},${endLine}` : "";
+        startLine && endLine ? `-L ${startLine},${endLine}` : '';
       const output =
         await $`git -C ${result.path} blame ${lineRange} --date=short ${path} 2>/dev/null | head -100`.text();
-      return output.trim() || "No blame info";
+      return output.trim() || 'No blame info';
     } catch (e) {
       return `Blame failed: ${e}`;
     }
@@ -570,20 +571,20 @@ export const blame = tool({
 });
 
 export const cleanup = tool({
-  description: "Remove a cloned repo from local autopsy cache",
+  description: 'Remove a cloned repo from local autopsy cache',
   args: {
     repo: tool.schema
       .string()
       .describe("GitHub repo (owner/repo or URL) or 'all' to clear everything"),
   },
-  async execute({ repo }, ctx) {
-    if (repo === "all") {
+  async execute({ repo }, _ctx) {
+    if (repo === 'all') {
       await $`rm -rf ${AUTOPSY_DIR}`.quiet();
       return `Cleared all repos from ${AUTOPSY_DIR}`;
     }
 
     const parsed = parseRepoUrl(repo);
-    if (!parsed) return "Invalid repo format";
+    if (!parsed) return 'Invalid repo format';
 
     const repoPath = join(AUTOPSY_DIR, parsed.owner, parsed.repo);
     if (existsSync(repoPath)) {
@@ -591,6 +592,6 @@ export const cleanup = tool({
       return `Removed: ${repoPath}`;
     }
 
-    return "Repo not in cache";
+    return 'Repo not in cache';
   },
 });

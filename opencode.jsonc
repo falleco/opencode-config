@@ -1,181 +1,181 @@
 {
-	"$schema": "https://opencode.ai/config.json",
+  "$schema": "https://opencode.ai/config.json",
 
-	// === Models ===
-	"model": "openai/gpt-5.2-codex",
-	"small_model": "openai/gpt-5.2", // title gen, lightweight tasks
-	"autoupdate": true,
-	// === TUI ===
-	"tui": {
-		"scroll_acceleration": {
-			"enabled": true // macOS-style momentum scrolling
-		}
-	},
+  // === Models ===
+  "model": "openai/gpt-5.2-codex",
+  "small_model": "openai/gpt-5.2", // title gen, lightweight tasks
+  "autoupdate": true,
+  // === TUI ===
+  "tui": {
+    "scroll_acceleration": {
+      "enabled": true // macOS-style momentum scrolling
+    }
+  },
 
-	// === Formatters ===
-	// Runs after file writes - uses project's formatter config
-	"formatter": {
-		"biome": {
-			"command": ["npx", "biome", "format", "--write", "$FILE"],
-			"extensions": [".js", ".jsx", ".ts", ".tsx", ".json", ".jsonc"]
-		}
-	},
+  // === Formatters ===
+  // Runs after file writes - uses project's formatter config
+  "formatter": {
+    "biome": {
+      "command": ["npx", "biome", "format", "--write", "$FILE"],
+      "extensions": [".js", ".jsx", ".ts", ".tsx", ".json", ".jsonc"]
+    }
+  },
 
-	// == Sharing ==
-	// WARNING: this is a security risk, do not share sessions with anyone automatically.
-	"share": "manual",
+  // == Sharing ==
+  // WARNING: this is a security risk, do not share sessions with anyone automatically.
+  "share": "manual",
 
-	// === Instructions ===
-	// AGENTS.md auto-loaded from ~/.config/opencode/ and repo root
-	// Knowledge files (knowledge/*.md) are loaded on-demand via @path references
+  // === Instructions ===
+  // AGENTS.md auto-loaded from ~/.config/opencode/ and repo root
+  // Knowledge files (knowledge/*.md) are loaded on-demand via @path references
 
-	// === Permissions ===
-	"permission": {
-		// .env reads without prompts
-		"read": {
-			".env": "allow",
-			".env.*": "allow",
-			".env-*": "allow"
-		},
-		"external_directory": "allow",
-		// Only deny the truly catastrophic - everything else just runs
-		"bash": {
-			"git push": "allow",
-			"git push *": "allow",
-			"sudo *": "deny",
-			"rm -rf /": "deny",
-			"rm -rf /*": "deny",
-			"rm -rf ~": "deny",
-			"rm -rf ~/*": "deny",
-			":(){:|:&};:": "deny" // fork bomb, just in case
-		}
-	},
+  // === Permissions ===
+  "permission": {
+    // .env reads without prompts
+    "read": {
+      ".env": "allow",
+      ".env.*": "allow",
+      ".env-*": "allow"
+    },
+    "external_directory": "allow",
+    // Only deny the truly catastrophic - everything else just runs
+    "bash": {
+      "git push": "allow",
+      "git push *": "allow",
+      "sudo *": "deny",
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny",
+      "rm -rf ~": "deny",
+      "rm -rf ~/*": "deny",
+      ":(){:|:&};:": "deny" // fork bomb, just in case
+    }
+  },
 
-	/*********************************
-	 ********** MCP Servers **********
-	 *********************************/
-	"mcp": {
-		"docker": {
-			"type": "local",
-			"command": ["uvx", "docker-mcp"],
-			"enabled": false
-		},
-		"kubernetes": {
-			"type": "local",
-			"command": ["npx", "-y", "kubernetes-mcp-server@latest"],
-			"enabled": false
-		},
-		"github": {
-			"type": "local",
-			"command": [
-				"docker",
-				"run",
-				"-i",
-				"--rm",
-				"--pull=always",
-				"-e",
-				"GITHUB_PERSONAL_ACCESS_TOKEN",
-				"ghcr.io/github/github-mcp-server"
-			],
-			"environment": {
-				"GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
-			},
-			"enabled": false
-		},
-		"next-devtools": {
-			"type": "local",
-			"command": ["npx", "-y", "next-devtools-mcp@latest"]
-		},
-		"chrome-devtools": {
-			"type": "local",
-			"command": ["npx", "-y", "chrome-devtools-mcp@latest"]
-		},
-		// Docs lookup for libraries - https://context7.com
-		"context7": {
-			"type": "remote",
-			"url": "https://mcp.context7.com/mcp"
-		},
-		// Web fetching - MCP official server (Python via uvx)
-		"fetch": {
-			"type": "local",
-			"command": ["uvx", "mcp-server-fetch"]
-		}
-	},
+  /*********************************
+   ********** MCP Servers **********
+   *********************************/
+  "mcp": {
+    "docker": {
+      "type": "local",
+      "command": ["uvx", "docker-mcp"],
+      "enabled": false
+    },
+    "kubernetes": {
+      "type": "local",
+      "command": ["npx", "-y", "kubernetes-mcp-server@latest"],
+      "enabled": false
+    },
+    "github": {
+      "type": "local",
+      "command": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "--pull=always",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "environment": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      },
+      "enabled": false
+    },
+    "next-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "next-devtools-mcp@latest"]
+    },
+    "chrome-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "chrome-devtools-mcp@latest"]
+    },
+    // Docs lookup for libraries - https://context7.com
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    // Web fetching - MCP official server (Python via uvx)
+    "fetch": {
+      "type": "local",
+      "command": ["uvx", "mcp-server-fetch"]
+    }
+  },
 
-	"plugin": ["opencode-beads"],
+  "plugin": ["opencode-beads"],
 
-	/*********************************
-	 ******** Agents Override ********
-	 *********************************/
-	"agent": {
-		// Build agent - full capability with slight creativity
-		"build": {
-			"temperature": 0.3
-		},
-		// Plan agent - read-only analysis, no file writes
-		"plan": {
-			"model": "openai/gpt-5.2-codex",
-			"temperature": 0.1,
-			"tools": {
-				"write": false,
-				"edit": false,
-				"patch": false
-			},
-			"permission": {
-				"bash": {
-					"git status": "allow",
-					"git diff*": "allow",
-					"git log*": "allow",
-					"git show*": "allow",
-					"bd *": "allow",
-					"rg *": "allow",
-					"tree *": "allow",
-					"wc *": "allow",
-					"head *": "allow",
-					"tail *": "allow",
-					"yarn run*": "allow",
-					"*": "deny"
-				}
-			}
-		},
-		// Security agent - read-only vulnerability scanning with Snyk
-		"security": {
-			"model": "openai/gpt-5.2-codex",
-			"temperature": 0.1, // Low temp for deterministic security analysis
-			"tools": {
-				"write": false,
-				"edit": false,
-				"patch": false
-			},
-			"description": "Security auditor - scans for vulnerabilities using Snyk tools (SCA, SAST, IaC, container). Read-only, reports findings without modification."
-		},
-		// Test writer agent - generates comprehensive test suites
-		"test-writer": {
-			"model": "openai/gpt-5.2-codex",
-			"temperature": 0.2, // Slight creativity for test case generation
-			"permission": {
-				"write": {
-					"**/*.test.ts": "allow",
-					"**/*.spec.ts": "allow",
-					"**/*.test.tsx": "allow",
-					"**/*.spec.tsx": "allow",
-					"*": "deny"
-				}
-			},
-			"description": "Test specialist - generates comprehensive unit, integration, and e2e tests. Can only write to test files."
-		},
-		// Docs agent - documentation writer (cheaper model)
-		"docs": {
-			"model": "openai/gpt-5.2-codex", // Haiku for cost-effective docs
-			"temperature": 0.3, // More creativity for readable documentation
-			"permission": {
-				"write": {
-					"**/*.md": "allow",
-					"**/*.mdx": "allow",
-					"*": "deny"
-				}
-			},
-			"description": "Documentation writer - generates and updates markdown docs, READMEs, and guides. Can only write to .md/.mdx files."
-		}
-	}
+  /*********************************
+   ******** Agents Override ********
+   *********************************/
+  "agent": {
+    // Build agent - full capability with slight creativity
+    "build": {
+      "temperature": 0.3
+    },
+    // Plan agent - read-only analysis, no file writes
+    "plan": {
+      "model": "openai/gpt-5.2-codex",
+      "temperature": 0.1,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "patch": false
+      },
+      "permission": {
+        "bash": {
+          "git status": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "bd *": "allow",
+          "rg *": "allow",
+          "tree *": "allow",
+          "wc *": "allow",
+          "head *": "allow",
+          "tail *": "allow",
+          "yarn run*": "allow",
+          "*": "deny"
+        }
+      }
+    },
+    // Security agent - read-only vulnerability scanning with Snyk
+    "security": {
+      "model": "openai/gpt-5.2-codex",
+      "temperature": 0.1, // Low temp for deterministic security analysis
+      "tools": {
+        "write": false,
+        "edit": false,
+        "patch": false
+      },
+      "description": "Security auditor - scans for vulnerabilities using Snyk tools (SCA, SAST, IaC, container). Read-only, reports findings without modification."
+    },
+    // Test writer agent - generates comprehensive test suites
+    "test-writer": {
+      "model": "openai/gpt-5.2-codex",
+      "temperature": 0.2, // Slight creativity for test case generation
+      "permission": {
+        "write": {
+          "**/*.test.ts": "allow",
+          "**/*.spec.ts": "allow",
+          "**/*.test.tsx": "allow",
+          "**/*.spec.tsx": "allow",
+          "*": "deny"
+        }
+      },
+      "description": "Test specialist - generates comprehensive unit, integration, and e2e tests. Can only write to test files."
+    },
+    // Docs agent - documentation writer (cheaper model)
+    "docs": {
+      "model": "openai/gpt-5.2-codex", // Haiku for cost-effective docs
+      "temperature": 0.3, // More creativity for readable documentation
+      "permission": {
+        "write": {
+          "**/*.md": "allow",
+          "**/*.mdx": "allow",
+          "*": "deny"
+        }
+      },
+      "description": "Documentation writer - generates and updates markdown docs, READMEs, and guides. Can only write to .md/.mdx files."
+    }
+  }
 }

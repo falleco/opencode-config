@@ -1,7 +1,7 @@
-import { tool } from "@opencode-ai/plugin";
-import { existsSync } from "fs";
-import { join, basename, extname } from "path";
-import { spawn } from "child_process";
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { basename, extname, join } from 'node:path';
+import { tool } from '@opencode-ai/plugin';
 
 /**
  * PDF Brain - Local knowledge base with vector search
@@ -20,18 +20,18 @@ async function runCli(
   signal?: AbortSignal,
 ): Promise<string> {
   return new Promise((resolve) => {
-    const proc = spawn("pdf-brain", args, {
+    const proc = spawn('pdf-brain', args, {
       env: { ...process.env },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    let stdout = "";
-    let stderr = "";
+    let stdout = '';
+    let stderr = '';
     let killed = false;
 
     const timeout = setTimeout(() => {
       killed = true;
-      proc.kill("SIGTERM");
+      proc.kill('SIGTERM');
       resolve(`Error: Command timed out after ${timeoutMs / 1000}s`);
     }, timeoutMs);
 
@@ -40,23 +40,23 @@ async function runCli(
       if (!killed) {
         killed = true;
         clearTimeout(timeout);
-        proc.kill("SIGTERM");
-        resolve("Operation cancelled");
+        proc.kill('SIGTERM');
+        resolve('Operation cancelled');
       }
     };
-    signal?.addEventListener("abort", abortListener);
+    signal?.addEventListener('abort', abortListener);
 
-    proc.stdout.on("data", (data) => {
+    proc.stdout.on('data', (data) => {
       stdout += data.toString();
     });
 
-    proc.stderr.on("data", (data) => {
+    proc.stderr.on('data', (data) => {
       stderr += data.toString();
     });
 
-    proc.on("close", (code) => {
+    proc.on('close', (code) => {
       clearTimeout(timeout);
-      signal?.removeEventListener("abort", abortListener);
+      signal?.removeEventListener('abort', abortListener);
       if (killed) return;
 
       if (code === 0) {
@@ -66,9 +66,9 @@ async function runCli(
       }
     });
 
-    proc.on("error", (err) => {
+    proc.on('error', (err) => {
       clearTimeout(timeout);
-      signal?.removeEventListener("abort", abortListener);
+      signal?.removeEventListener('abort', abortListener);
       if (killed) return;
       resolve(`Error: ${err.message}`);
     });
@@ -76,38 +76,38 @@ async function runCli(
 }
 
 function isUrl(str: string): boolean {
-  return str.startsWith("http://") || str.startsWith("https://");
+  return str.startsWith('http://') || str.startsWith('https://');
 }
 
 function isValidFile(path: string): boolean {
   const ext = extname(path).toLowerCase();
-  return ext === ".pdf" || ext === ".md" || ext === ".markdown";
+  return ext === '.pdf' || ext === '.md' || ext === '.markdown';
 }
 
 export const add = tool({
   description:
-    "Add a PDF or Markdown file to the library - extracts text, generates embeddings for semantic search. Supports local paths and URLs.",
+    'Add a PDF or Markdown file to the library - extracts text, generates embeddings for semantic search. Supports local paths and URLs.',
   args: {
-    path: tool.schema.string().describe("Path to file (PDF/Markdown) or URL"),
-    tags: tool.schema.string().optional().describe("Comma-separated tags"),
+    path: tool.schema.string().describe('Path to file (PDF/Markdown) or URL'),
+    tags: tool.schema.string().optional().describe('Comma-separated tags'),
     title: tool.schema
       .string()
       .optional()
-      .describe("Custom title (default: filename or frontmatter)"),
+      .describe('Custom title (default: filename or frontmatter)'),
   },
   async execute({ path: filePath, tags, title }, ctx) {
     // Handle URLs directly
     if (isUrl(filePath)) {
-      const args = ["add", filePath];
-      if (tags) args.push("--tags", tags);
-      if (title) args.push("--title", title);
+      const args = ['add', filePath];
+      if (tags) args.push('--tags', tags);
+      if (title) args.push('--title', title);
       return runCli(args, EMBEDDING_TIMEOUT_MS, ctx?.abort);
     }
 
     // Resolve local path
-    const resolvedPath = filePath.startsWith("~")
-      ? filePath.replace("~", process.env.HOME || "")
-      : filePath.startsWith("/")
+    const resolvedPath = filePath.startsWith('~')
+      ? filePath.replace('~', process.env.HOME || '')
+      : filePath.startsWith('/')
         ? filePath
         : join(process.cwd(), filePath);
 
@@ -116,12 +116,12 @@ export const add = tool({
     }
 
     if (!isValidFile(resolvedPath)) {
-      return "Unsupported file type. Use PDF or Markdown files.";
+      return 'Unsupported file type. Use PDF or Markdown files.';
     }
 
-    const args = ["add", resolvedPath];
-    if (tags) args.push("--tags", tags);
-    if (title) args.push("--title", title);
+    const args = ['add', resolvedPath];
+    if (tags) args.push('--tags', tags);
+    if (title) args.push('--title', title);
 
     // Embedding generation can be slow
     return runCli(args, EMBEDDING_TIMEOUT_MS, ctx?.abort);
@@ -130,29 +130,29 @@ export const add = tool({
 
 export const search = tool({
   description:
-    "Semantic search across all documents using vector similarity (requires Ollama)",
+    'Semantic search across all documents using vector similarity (requires Ollama)',
   args: {
-    query: tool.schema.string().describe("Natural language search query"),
+    query: tool.schema.string().describe('Natural language search query'),
     limit: tool.schema
       .number()
       .optional()
-      .describe("Max results (default: 10)"),
-    tag: tool.schema.string().optional().describe("Filter by tag"),
+      .describe('Max results (default: 10)'),
+    tag: tool.schema.string().optional().describe('Filter by tag'),
     fts: tool.schema
       .boolean()
       .optional()
-      .describe("Use full-text search only (skip embeddings)"),
+      .describe('Use full-text search only (skip embeddings)'),
     expand: tool.schema
       .number()
       .optional()
-      .describe("Expand context around matches (max: 4000 chars)"),
+      .describe('Expand context around matches (max: 4000 chars)'),
   },
   async execute({ query, limit, tag, fts, expand }, ctx) {
-    const args = ["search", query];
-    if (limit) args.push("--limit", String(limit));
-    if (tag) args.push("--tag", tag);
-    if (fts) args.push("--fts");
-    if (expand) args.push("--expand", String(Math.min(expand, 4000)));
+    const args = ['search', query];
+    if (limit) args.push('--limit', String(limit));
+    if (tag) args.push('--tag', tag);
+    if (fts) args.push('--fts');
+    if (expand) args.push('--expand', String(Math.min(expand, 4000)));
 
     // Vector search needs Ollama for query embedding (unless fts-only)
     return runCli(args, fts ? DEFAULT_TIMEOUT_MS : 60_000, ctx?.abort);
@@ -160,129 +160,129 @@ export const search = tool({
 });
 
 export const read = tool({
-  description: "Get document details and metadata",
+  description: 'Get document details and metadata',
   args: {
-    query: tool.schema.string().describe("Document ID or title"),
+    query: tool.schema.string().describe('Document ID or title'),
   },
   async execute({ query }, ctx) {
-    return runCli(["read", query], DEFAULT_TIMEOUT_MS, ctx?.abort);
+    return runCli(['read', query], DEFAULT_TIMEOUT_MS, ctx?.abort);
   },
 });
 
 export const list = tool({
-  description: "List all documents in the library",
+  description: 'List all documents in the library',
   args: {
-    tag: tool.schema.string().optional().describe("Filter by tag"),
+    tag: tool.schema.string().optional().describe('Filter by tag'),
   },
   async execute({ tag }, ctx) {
-    const args = ["list"];
-    if (tag) args.push("--tag", tag);
+    const args = ['list'];
+    if (tag) args.push('--tag', tag);
     return runCli(args, DEFAULT_TIMEOUT_MS, ctx?.abort);
   },
 });
 
 export const remove = tool({
-  description: "Remove a document from the library",
+  description: 'Remove a document from the library',
   args: {
-    query: tool.schema.string().describe("Document ID or title to remove"),
+    query: tool.schema.string().describe('Document ID or title to remove'),
   },
   async execute({ query }, ctx) {
-    return runCli(["remove", query], DEFAULT_TIMEOUT_MS, ctx?.abort);
+    return runCli(['remove', query], DEFAULT_TIMEOUT_MS, ctx?.abort);
   },
 });
 
 export const tag = tool({
-  description: "Set tags on a document",
+  description: 'Set tags on a document',
   args: {
-    query: tool.schema.string().describe("Document ID or title"),
-    tags: tool.schema.string().describe("Comma-separated tags to set"),
+    query: tool.schema.string().describe('Document ID or title'),
+    tags: tool.schema.string().describe('Comma-separated tags to set'),
   },
   async execute({ query, tags }, ctx) {
-    return runCli(["tag", query, tags], DEFAULT_TIMEOUT_MS, ctx?.abort);
+    return runCli(['tag', query, tags], DEFAULT_TIMEOUT_MS, ctx?.abort);
   },
 });
 
 export const stats = tool({
-  description: "Show library statistics (documents, chunks, embeddings)",
+  description: 'Show library statistics (documents, chunks, embeddings)',
   args: {},
   async execute(_args, ctx) {
-    return runCli(["stats"], DEFAULT_TIMEOUT_MS, ctx?.abort);
+    return runCli(['stats'], DEFAULT_TIMEOUT_MS, ctx?.abort);
   },
 });
 
 export const check = tool({
-  description: "Check if Ollama is ready for embedding generation",
+  description: 'Check if Ollama is ready for embedding generation',
   args: {},
   async execute(_args, ctx) {
-    return runCli(["check"], DEFAULT_TIMEOUT_MS, ctx?.abort);
+    return runCli(['check'], DEFAULT_TIMEOUT_MS, ctx?.abort);
   },
 });
 
 export const repair = tool({
   description:
-    "Fix database integrity issues - removes orphaned chunks/embeddings",
+    'Fix database integrity issues - removes orphaned chunks/embeddings',
   args: {},
   async execute(_args, ctx) {
-    return runCli(["repair"], DEFAULT_TIMEOUT_MS, ctx?.abort);
+    return runCli(['repair'], DEFAULT_TIMEOUT_MS, ctx?.abort);
   },
 });
 
 export const exportLib = tool({
-  description: "Export library database for backup or sharing",
+  description: 'Export library database for backup or sharing',
   args: {
     output: tool.schema
       .string()
       .optional()
-      .describe("Output file path (default: ./pdf-brain-export.tar.gz)"),
+      .describe('Output file path (default: ./pdf-brain-export.tar.gz)'),
   },
   async execute({ output }, ctx) {
-    const args = ["export"];
-    if (output) args.push("--output", output);
+    const args = ['export'];
+    if (output) args.push('--output', output);
     return runCli(args, 60_000, ctx?.abort);
   },
 });
 
 export const importLib = tool({
-  description: "Import library database from export archive",
+  description: 'Import library database from export archive',
   args: {
-    file: tool.schema.string().describe("Path to export archive"),
+    file: tool.schema.string().describe('Path to export archive'),
     force: tool.schema
       .boolean()
       .optional()
-      .describe("Overwrite existing library"),
+      .describe('Overwrite existing library'),
   },
   async execute({ file, force }, ctx) {
-    const args = ["import", file];
-    if (force) args.push("--force");
+    const args = ['import', file];
+    if (force) args.push('--force');
     return runCli(args, 60_000, ctx?.abort);
   },
 });
 
 export const migrate = tool({
-  description: "Database migration utilities",
+  description: 'Database migration utilities',
   args: {
     check: tool.schema
       .boolean()
       .optional()
-      .describe("Check if migration is needed"),
+      .describe('Check if migration is needed'),
     importFile: tool.schema
       .string()
       .optional()
-      .describe("Import from SQL dump file"),
+      .describe('Import from SQL dump file'),
     generateScript: tool.schema
       .boolean()
       .optional()
-      .describe("Generate export script for current database"),
+      .describe('Generate export script for current database'),
   },
   async execute({ check, importFile, generateScript }, ctx) {
-    const args = ["migrate"];
-    if (check) args.push("--check");
-    if (importFile) args.push("--import", importFile);
-    if (generateScript) args.push("--generate-script");
+    const args = ['migrate'];
+    if (check) args.push('--check');
+    if (importFile) args.push('--import', importFile);
+    if (generateScript) args.push('--generate-script');
 
     // If no flags, just run migrate (shows help)
     if (!check && !importFile && !generateScript) {
-      args.push("--check");
+      args.push('--check');
     }
 
     return runCli(args, 60_000, ctx?.abort);
@@ -290,19 +290,19 @@ export const migrate = tool({
 });
 
 export const batch_add = tool({
-  description: "Add multiple PDFs/Markdown files from a directory",
+  description: 'Add multiple PDFs/Markdown files from a directory',
   args: {
-    dir: tool.schema.string().describe("Directory containing documents"),
-    tags: tool.schema.string().optional().describe("Tags to apply to all"),
+    dir: tool.schema.string().describe('Directory containing documents'),
+    tags: tool.schema.string().optional().describe('Tags to apply to all'),
     recursive: tool.schema
       .boolean()
       .optional()
-      .describe("Search subdirectories"),
+      .describe('Search subdirectories'),
   },
   async execute({ dir, tags, recursive = false }, ctx) {
-    const resolvedDir = dir.startsWith("~")
-      ? dir.replace("~", process.env.HOME || "")
-      : dir.startsWith("/")
+    const resolvedDir = dir.startsWith('~')
+      ? dir.replace('~', process.env.HOME || '')
+      : dir.startsWith('/')
         ? dir
         : join(process.cwd(), dir);
 
@@ -311,7 +311,7 @@ export const batch_add = tool({
     }
 
     // Find documents
-    const { readdirSync } = await import("fs");
+    const { readdirSync } = await import('node:fs');
 
     function findDocs(dir: string, recurse: boolean): string[] {
       const results: string[] = [];
@@ -337,17 +337,17 @@ export const batch_add = tool({
     for (const docPath of docList) {
       // Check for abort between iterations
       if (ctx?.abort?.aborted) {
-        results.push("\n\nOperation cancelled - remaining files not processed");
+        results.push('\n\nOperation cancelled - remaining files not processed');
         break;
       }
 
       const title = basename(docPath, extname(docPath));
       try {
-        const args = ["add", docPath];
-        if (tags) args.push("--tags", tags);
+        const args = ['add', docPath];
+        if (tags) args.push('--tags', tags);
 
         const result = await runCli(args, EMBEDDING_TIMEOUT_MS, ctx?.abort);
-        if (result.includes("✓") || result.includes("Already")) {
+        if (result.includes('✓') || result.includes('Already')) {
           results.push(`✓ ${title}`);
         } else {
           results.push(`✗ ${title}: ${result.slice(0, 100)}`);
@@ -357,6 +357,6 @@ export const batch_add = tool({
       }
     }
 
-    return `# Batch Add Results (${docList.length} documents)\n\n${results.join("\n")}`;
+    return `# Batch Add Results (${docList.length} documents)\n\n${results.join('\n')}`;
   },
 });

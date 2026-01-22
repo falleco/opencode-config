@@ -8,13 +8,13 @@
  * Project ID is the first git root commit SHA (40-char hex), with SHA-256 path hash fallback (16-char).
  */
 
-import { Database } from "bun:sqlite"
-import { mkdirSync } from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
-import { z } from "zod"
-import type { OpencodeClient } from "../kdco-primitives"
-import { getProjectId, logWarn } from "../kdco-primitives"
+import { Database } from 'bun:sqlite';
+import { mkdirSync } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { z } from 'zod';
+import type { OpencodeClient } from '../kdco-primitives';
+import { getProjectId, logWarn } from '../kdco-primitives';
 
 // =============================================================================
 // TYPES
@@ -22,23 +22,23 @@ import { getProjectId, logWarn } from "../kdco-primitives"
 
 /** Represents an active worktree session */
 export interface Session {
-	id: string
-	branch: string
-	path: string
-	createdAt: string
+  id: string;
+  branch: string;
+  path: string;
+  createdAt: string;
 }
 
 /** Pending spawn operation to be processed on session.idle */
 export interface PendingSpawn {
-	branch: string
-	path: string
-	sessionId: string
+  branch: string;
+  path: string;
+  sessionId: string;
 }
 
 /** Pending delete operation to be processed on session.idle */
 export interface PendingDelete {
-	branch: string
-	path: string
+  branch: string;
+  path: string;
 }
 
 // =============================================================================
@@ -46,22 +46,22 @@ export interface PendingDelete {
 // =============================================================================
 
 const sessionSchema = z.object({
-	id: z.string().min(1),
-	branch: z.string().min(1),
-	path: z.string().min(1),
-	createdAt: z.string().min(1),
-})
+  id: z.string().min(1),
+  branch: z.string().min(1),
+  path: z.string().min(1),
+  createdAt: z.string().min(1),
+});
 
 const pendingSpawnSchema = z.object({
-	branch: z.string().min(1),
-	path: z.string().min(1),
-	sessionId: z.string().min(1),
-})
+  branch: z.string().min(1),
+  path: z.string().min(1),
+  sessionId: z.string().min(1),
+});
 
 const pendingDeleteSchema = z.object({
-	branch: z.string().min(1),
-	path: z.string().min(1),
-})
+  branch: z.string().min(1),
+  path: z.string().min(1),
+});
 
 // =============================================================================
 // DATABASE UTILITIES
@@ -74,12 +74,23 @@ const pendingDeleteSchema = z.object({
  * @param branch - Branch name for the worktree
  * @returns Absolute path to the worktree directory
  */
-export async function getWorktreePath(projectRoot: string, branch: string): Promise<string> {
-	if (!branch || typeof branch !== "string") {
-		throw new Error("branch is required")
-	}
-	const projectId = await getProjectId(projectRoot)
-	return path.join(os.homedir(), ".local", "share", "opencode", "worktree", projectId, branch)
+export async function getWorktreePath(
+  projectRoot: string,
+  branch: string,
+): Promise<string> {
+  if (!branch || typeof branch !== 'string') {
+    throw new Error('branch is required');
+  }
+  const projectId = await getProjectId(projectRoot);
+  return path.join(
+    os.homedir(),
+    '.local',
+    'share',
+    'opencode',
+    'worktree',
+    projectId,
+    branch,
+  );
 }
 
 /**
@@ -87,8 +98,8 @@ export async function getWorktreePath(projectRoot: string, branch: string): Prom
  * Location: ~/.local/share/opencode/plugins/worktree/
  */
 function getDbDirectory(): string {
-	const home = os.homedir()
-	return path.join(home, ".local", "share", "opencode", "plugins", "worktree")
+  const home = os.homedir();
+  return path.join(home, '.local', 'share', 'opencode', 'plugins', 'worktree');
 }
 
 /**
@@ -96,8 +107,8 @@ function getDbDirectory(): string {
  * @param projectRoot - Absolute path to the project root
  */
 async function getDbPath(projectRoot: string): Promise<string> {
-	const projectId = await getProjectId(projectRoot)
-	return path.join(getDbDirectory(), `${projectId}.sqlite`)
+  const projectId = await getProjectId(projectRoot);
+  return path.join(getDbDirectory(), `${projectId}.sqlite`);
 }
 
 /**
@@ -115,35 +126,35 @@ async function getDbPath(projectRoot: string): Promise<string> {
  * ```
  */
 export async function initStateDb(projectRoot: string): Promise<Database> {
-	// Guard: validate project root
-	if (!projectRoot || typeof projectRoot !== "string") {
-		throw new Error("initStateDb requires a valid project root path")
-	}
+  // Guard: validate project root
+  if (!projectRoot || typeof projectRoot !== 'string') {
+    throw new Error('initStateDb requires a valid project root path');
+  }
 
-	const dbPath = await getDbPath(projectRoot)
-	const dbDir = path.dirname(dbPath)
+  const dbPath = await getDbPath(projectRoot);
+  const dbDir = path.dirname(dbPath);
 
-	// Create directory synchronously (required before opening DB)
-	mkdirSync(dbDir, { recursive: true })
+  // Create directory synchronously (required before opening DB)
+  mkdirSync(dbDir, { recursive: true });
 
-	// Open database (creates if doesn't exist)
-	const db = new Database(dbPath)
+  // Open database (creates if doesn't exist)
+  const db = new Database(dbPath);
 
-	// Configure SQLite for concurrent access
-	db.exec("PRAGMA journal_mode=WAL")
-	db.exec("PRAGMA busy_timeout=5000")
+  // Configure SQLite for concurrent access
+  db.exec('PRAGMA journal_mode=WAL');
+  db.exec('PRAGMA busy_timeout=5000');
 
-	// Create tables with schema
-	db.exec(`
+  // Create tables with schema
+  db.exec(`
 		CREATE TABLE IF NOT EXISTS sessions (
 			id TEXT PRIMARY KEY,
 			branch TEXT NOT NULL,
 			path TEXT NOT NULL,
 			created_at TEXT NOT NULL
 		)
-	`)
+	`);
 
-	db.exec(`
+  db.exec(`
 		CREATE TABLE IF NOT EXISTS pending_operations (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			type TEXT NOT NULL,
@@ -151,9 +162,9 @@ export async function initStateDb(projectRoot: string): Promise<Database> {
 			path TEXT NOT NULL,
 			session_id TEXT
 		)
-	`)
+	`);
 
-	return db
+  return db;
 }
 
 // =============================================================================
@@ -168,20 +179,20 @@ export async function initStateDb(projectRoot: string): Promise<Database> {
  * @param session - Session data to persist
  */
 export function addSession(db: Database, session: Session): void {
-	// Parse at boundary for type safety
-	const parsed = sessionSchema.parse(session)
+  // Parse at boundary for type safety
+  const parsed = sessionSchema.parse(session);
 
-	const stmt = db.prepare(`
+  const stmt = db.prepare(`
 		INSERT OR REPLACE INTO sessions (id, branch, path, created_at)
 		VALUES ($id, $branch, $path, $createdAt)
-	`)
+	`);
 
-	stmt.run({
-		$id: parsed.id,
-		$branch: parsed.branch,
-		$path: parsed.path,
-		$createdAt: parsed.createdAt,
-	})
+  stmt.run({
+    $id: parsed.id,
+    $branch: parsed.branch,
+    $path: parsed.path,
+    $createdAt: parsed.createdAt,
+  });
 }
 
 /**
@@ -192,24 +203,24 @@ export function addSession(db: Database, session: Session): void {
  * @returns Session if found, null otherwise
  */
 export function getSession(db: Database, sessionId: string): Session | null {
-	// Guard: empty session ID
-	if (!sessionId) return null
+  // Guard: empty session ID
+  if (!sessionId) return null;
 
-	const stmt = db.prepare(`
+  const stmt = db.prepare(`
 		SELECT id, branch, path, created_at as createdAt
 		FROM sessions
 		WHERE id = $id
-	`)
+	`);
 
-	const row = stmt.get({ $id: sessionId }) as Record<string, string> | null
-	if (!row) return null
+  const row = stmt.get({ $id: sessionId }) as Record<string, string> | null;
+  if (!row) return null;
 
-	return {
-		id: row.id,
-		branch: row.branch,
-		path: row.path,
-		createdAt: row.createdAt,
-	}
+  return {
+    id: row.id,
+    branch: row.branch,
+    path: row.path,
+    createdAt: row.createdAt,
+  };
 }
 
 /**
@@ -220,11 +231,11 @@ export function getSession(db: Database, sessionId: string): Session | null {
  * @param branch - Branch name to remove
  */
 export function removeSession(db: Database, branch: string): void {
-	// Guard: empty branch
-	if (!branch) return
+  // Guard: empty branch
+  if (!branch) return;
 
-	const stmt = db.prepare(`DELETE FROM sessions WHERE branch = $branch`)
-	stmt.run({ $branch: branch })
+  const stmt = db.prepare('DELETE FROM sessions WHERE branch = $branch');
+  stmt.run({ $branch: branch });
 }
 
 /**
@@ -234,19 +245,19 @@ export function removeSession(db: Database, branch: string): void {
  * @returns Array of all sessions, empty if none
  */
 export function getAllSessions(db: Database): Session[] {
-	const stmt = db.prepare(`
+  const stmt = db.prepare(`
 		SELECT id, branch, path, created_at as createdAt
 		FROM sessions
 		ORDER BY created_at ASC
-	`)
+	`);
 
-	const rows = stmt.all() as Array<Record<string, string>>
-	return rows.map((row) => ({
-		id: row.id,
-		branch: row.branch,
-		path: row.path,
-		createdAt: row.createdAt,
-	}))
+  const rows = stmt.all() as Array<Record<string, string>>;
+  return rows.map((row) => ({
+    id: row.id,
+    branch: row.branch,
+    path: row.path,
+    createdAt: row.createdAt,
+  }));
 }
 
 // =============================================================================
@@ -262,39 +273,43 @@ export function getAllSessions(db: Database): Session[] {
  * @param db - Database instance from initStateDb
  * @param spawn - Spawn operation data
  */
-export function setPendingSpawn(db: Database, spawn: PendingSpawn, client?: OpencodeClient): void {
-	// Parse at boundary for type safety
-	const parsed = pendingSpawnSchema.parse(spawn)
+export function setPendingSpawn(
+  db: Database,
+  spawn: PendingSpawn,
+  client?: OpencodeClient,
+): void {
+  // Parse at boundary for type safety
+  const parsed = pendingSpawnSchema.parse(spawn);
 
-	// Check for existing operations and warn about replacement
-	const existingSpawn = getPendingSpawn(db)
-	const existingDelete = getPendingDelete(db)
+  // Check for existing operations and warn about replacement
+  const existingSpawn = getPendingSpawn(db);
+  const existingDelete = getPendingDelete(db);
 
-	if (existingSpawn) {
-		logWarn(
-			client,
-			"worktree",
-			`Replacing pending spawn: "${existingSpawn.branch}" → "${parsed.branch}"`,
-		)
-	} else if (existingDelete) {
-		logWarn(
-			client,
-			"worktree",
-			`Pending spawn replacing pending delete for: "${existingDelete.branch}"`,
-		)
-	}
+  if (existingSpawn) {
+    logWarn(
+      client,
+      'worktree',
+      `Replacing pending spawn: "${existingSpawn.branch}" → "${parsed.branch}"`,
+    );
+  } else if (existingDelete) {
+    logWarn(
+      client,
+      'worktree',
+      `Pending spawn replacing pending delete for: "${existingDelete.branch}"`,
+    );
+  }
 
-	// Atomic: replace any existing pending operation
-	const stmt = db.prepare(`
+  // Atomic: replace any existing pending operation
+  const stmt = db.prepare(`
 		INSERT OR REPLACE INTO pending_operations (id, type, branch, path, session_id)
 		VALUES (1, 'spawn', $branch, $path, $sessionId)
-	`)
+	`);
 
-	stmt.run({
-		$branch: parsed.branch,
-		$path: parsed.path,
-		$sessionId: parsed.sessionId,
-	})
+  stmt.run({
+    $branch: parsed.branch,
+    $path: parsed.path,
+    $sessionId: parsed.sessionId,
+  });
 }
 
 /**
@@ -304,20 +319,20 @@ export function setPendingSpawn(db: Database, spawn: PendingSpawn, client?: Open
  * @returns PendingSpawn if exists and type is 'spawn', null otherwise
  */
 export function getPendingSpawn(db: Database): PendingSpawn | null {
-	const stmt = db.prepare(`
+  const stmt = db.prepare(`
 		SELECT type, branch, path, session_id as sessionId
 		FROM pending_operations
 		WHERE id = 1 AND type = 'spawn'
-	`)
+	`);
 
-	const row = stmt.get() as Record<string, string> | null
-	if (!row) return null
+  const row = stmt.get() as Record<string, string> | null;
+  if (!row) return null;
 
-	return {
-		branch: row.branch,
-		path: row.path,
-		sessionId: row.sessionId,
-	}
+  return {
+    branch: row.branch,
+    path: row.path,
+    sessionId: row.sessionId,
+  };
 }
 
 /**
@@ -327,8 +342,10 @@ export function getPendingSpawn(db: Database): PendingSpawn | null {
  * @param db - Database instance from initStateDb
  */
 export function clearPendingSpawn(db: Database): void {
-	const stmt = db.prepare(`DELETE FROM pending_operations WHERE id = 1 AND type = 'spawn'`)
-	stmt.run()
+  const stmt = db.prepare(
+    `DELETE FROM pending_operations WHERE id = 1 AND type = 'spawn'`,
+  );
+  stmt.run();
 }
 
 // =============================================================================
@@ -344,38 +361,42 @@ export function clearPendingSpawn(db: Database): void {
  * @param db - Database instance from initStateDb
  * @param del - Delete operation data
  */
-export function setPendingDelete(db: Database, del: PendingDelete, client?: OpencodeClient): void {
-	// Parse at boundary for type safety
-	const parsed = pendingDeleteSchema.parse(del)
+export function setPendingDelete(
+  db: Database,
+  del: PendingDelete,
+  client?: OpencodeClient,
+): void {
+  // Parse at boundary for type safety
+  const parsed = pendingDeleteSchema.parse(del);
 
-	// Check for existing operations and warn about replacement
-	const existingDelete = getPendingDelete(db)
-	const existingSpawn = getPendingSpawn(db)
+  // Check for existing operations and warn about replacement
+  const existingDelete = getPendingDelete(db);
+  const existingSpawn = getPendingSpawn(db);
 
-	if (existingDelete) {
-		logWarn(
-			client,
-			"worktree",
-			`Replacing pending delete: "${existingDelete.branch}" → "${parsed.branch}"`,
-		)
-	} else if (existingSpawn) {
-		logWarn(
-			client,
-			"worktree",
-			`Pending delete replacing pending spawn for: "${existingSpawn.branch}"`,
-		)
-	}
+  if (existingDelete) {
+    logWarn(
+      client,
+      'worktree',
+      `Replacing pending delete: "${existingDelete.branch}" → "${parsed.branch}"`,
+    );
+  } else if (existingSpawn) {
+    logWarn(
+      client,
+      'worktree',
+      `Pending delete replacing pending spawn for: "${existingSpawn.branch}"`,
+    );
+  }
 
-	// Atomic: replace any existing pending operation
-	const stmt = db.prepare(`
+  // Atomic: replace any existing pending operation
+  const stmt = db.prepare(`
 		INSERT OR REPLACE INTO pending_operations (id, type, branch, path, session_id)
 		VALUES (1, 'delete', $branch, $path, NULL)
-	`)
+	`);
 
-	stmt.run({
-		$branch: parsed.branch,
-		$path: parsed.path,
-	})
+  stmt.run({
+    $branch: parsed.branch,
+    $path: parsed.path,
+  });
 }
 
 /**
@@ -385,19 +406,19 @@ export function setPendingDelete(db: Database, del: PendingDelete, client?: Open
  * @returns PendingDelete if exists and type is 'delete', null otherwise
  */
 export function getPendingDelete(db: Database): PendingDelete | null {
-	const stmt = db.prepare(`
+  const stmt = db.prepare(`
 		SELECT type, branch, path
 		FROM pending_operations
 		WHERE id = 1 AND type = 'delete'
-	`)
+	`);
 
-	const row = stmt.get() as Record<string, string> | null
-	if (!row) return null
+  const row = stmt.get() as Record<string, string> | null;
+  if (!row) return null;
 
-	return {
-		branch: row.branch,
-		path: row.path,
-	}
+  return {
+    branch: row.branch,
+    path: row.path,
+  };
 }
 
 /**
@@ -407,6 +428,8 @@ export function getPendingDelete(db: Database): PendingDelete | null {
  * @param db - Database instance from initStateDb
  */
 export function clearPendingDelete(db: Database): void {
-	const stmt = db.prepare(`DELETE FROM pending_operations WHERE id = 1 AND type = 'delete'`)
-	stmt.run()
+  const stmt = db.prepare(
+    `DELETE FROM pending_operations WHERE id = 1 AND type = 'delete'`,
+  );
+  stmt.run();
 }
