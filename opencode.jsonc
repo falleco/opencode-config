@@ -141,6 +141,7 @@
     // Security agent - read-only vulnerability scanning with Snyk
     "security": {
       "model": "openai/gpt-5.2-codex",
+      "type": "subagent",
       "temperature": 0.1, // Low temp for deterministic security analysis
       "tools": {
         "write": false,
@@ -153,6 +154,7 @@
     "test-writer": {
       "model": "openai/gpt-5.2-codex",
       "temperature": 0.2, // Slight creativity for test case generation
+      "type": "subagent",
       "permission": {
         "write": {
           "**/*.test.ts": "allow",
@@ -168,6 +170,7 @@
     "docs": {
       "model": "openai/gpt-5.2-codex", // Haiku for cost-effective docs
       "temperature": 0.3, // More creativity for readable documentation
+      "type": "subagent",
       "permission": {
         "write": {
           "**/*.md": "allow",
