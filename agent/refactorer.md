@@ -11,7 +11,6 @@ tools:
   glob: true
   grep: true
   task: true
-  agent-mail: true
 ---
 
 # Pattern Migration Agent
