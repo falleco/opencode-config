@@ -177,5 +177,16 @@
       },
       "description": "Documentation writer - generates and updates markdown docs, READMEs, and guides. Can only write to .md/.mdx files."
     }
+  },
+
+  "server": {
+    "port": 4096,
+    "hostname": "0.0.0.0",
+    "mdns": true,
+    "cors": [
+      "http://localhost:4096",
+      "https://code.intranet.crisanto.family",
+      "https://auth.intranet.crisanto.family"
+    ]
   }
 }
