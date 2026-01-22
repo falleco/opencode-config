@@ -1,14 +1,25 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2015", "ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": ["bun-types", "@types/node"],
-    "noEmit": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
-  },
-  "include": ["tool/**/*.ts", "plugin/**/*.ts"]
+	"compilerOptions": {
+		"target": "ES2023",
+		"lib": ["ES2015", "ES2022"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"types": ["bun-types", "@types/node"],
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+		"declaration": true,
+		"removeComments": true,
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true,
+		"sourceMap": true,
+		"incremental": true,
+		"strictNullChecks": true,
+		"forceConsistentCasingInFileNames": true,
+		"noImplicitAny": false,
+		"strictBindCallApply": false,
+		"noFallthroughCasesInSwitch": false,
+		"resolveJsonModule": true
+	},
+	"include": ["tool/**/*.ts", "plugin/**/*.ts"]
 }
