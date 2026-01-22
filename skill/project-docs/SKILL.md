@@ -1,6 +1,6 @@
 ---
 name: project-docs
-description: Generate comprehensive, professional project documentation structures including README, ARCHITECTURE, USER_GUIDE, DEVELOPER_GUIDE, and CONTRIBUTING files. Use when the user requests project documentation creation, asks to "document a project", needs standard documentation files, or wants to set up docs for a new repository. Adapts to Python/Go projects and OpenSource/internal contexts.
+description: Generate comprehensive, professional project documentation structures including README, ARCHITECTURE and DEVELOPER_GUIDE files. Use when the user requests project documentation creation, asks to "document a project", needs standard documentation files, or wants to set up docs for a new repository. Adapts to Python/Go projects and OpenSource/internal contexts.
 license: MIT
 compatibility: opencode
 ---
@@ -15,9 +15,7 @@ Always generate these five core files:
 
 1. **README.md** - Project overview, quick start, badges
 2. **ARCHITECTURE.md** - System design, components, data flow
-3. **USER_GUIDE.md** - Usage examples, configuration, troubleshooting
 4. **DEVELOPER_GUIDE.md** - Development setup, testing, contribution workflow
-5. **CONTRIBUTING.md** - Contribution guidelines, code standards, PR process
 
 ## Workflow
 
@@ -68,8 +66,6 @@ Generate files in this order:
 1. **README.md** first (most visible, sets tone)
 2. **ARCHITECTURE.md** (technical foundation)
 3. **DEVELOPER_GUIDE.md** (setup and contribution)
-4. **USER_GUIDE.md** (end-user focused)
-5. **CONTRIBUTING.md** (community guidelines)
 
 Each file must:
 
