@@ -81,10 +81,10 @@ git log --oneline -5
 git status --short
 
 # Check if it's a type error
-pnpm exec tsc --noEmit 2>&1 | head -30
+yarn exec tsc --noEmit 2>&1 | head -30
 
 # Check if it's a runtime error in tests
-pnpm test --run 2>&1 | tail -50 || true
+yarn test --run 2>&1 | tail -50 || true
 ```
 
 ## Step 5: Trace the Error
@@ -195,8 +195,8 @@ Want me to apply this fix? (y/n)
 If yes, use Edit tool to apply the fix, then verify:
 
 ```bash
-pnpm exec tsc --noEmit
-pnpm test --run 2>&1 | tail -20 || true
+yarn exec tsc --noEmit
+yarn test --run 2>&1 | tail -20 || true
 ```
 
 ## Step 10: Save Novel Pattern (if --save or novel error)

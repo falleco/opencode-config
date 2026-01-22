@@ -10,10 +10,10 @@ Run these in parallel to identify issues:
 
 ```bash
 # Type errors
-pnpm exec tsc --noEmit 2>&1 | head -100
+yarn exec tsc --noEmit 2>&1 | head -100
 
 # Lint issues (if available)
-pnpm run lint 2>&1 | head -100 || true
+yarn run lint 2>&1 | head -100 || true
 
 # Find console.logs in src (excluding tests)
 rg "console\.(log|debug|info)" src --glob '!**/*.test.*' --glob '!**/__tests__/**' -l || true

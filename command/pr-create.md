@@ -71,9 +71,9 @@ Determine:
 - [Key change 3]
 
 ## Testing
-- [ ] Type check passes (`pnpm exec tsc --noEmit`)
-- [ ] Lint passes (`pnpm run lint`)
-- [ ] Tests pass (`pnpm test`)
+- [ ] Type check passes (`yarn exec tsc --noEmit`)
+- [ ] Lint passes (`yarn run lint`)
+- [ ] Tests pass (`yarn test`)
 - [ ] Manual testing done
 
 ## Related

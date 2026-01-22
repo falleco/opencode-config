@@ -14,8 +14,8 @@ export default tool({
   async execute({ file }) {
     try {
       const cmd = file
-        ? `pnpm exec tsc --noEmit "${file}" 2>&1`
-        : 'pnpm exec tsc --noEmit 2>&1';
+        ? `yarn exec tsc --noEmit "${file}" 2>&1`
+        : 'yarn exec tsc --noEmit 2>&1';
 
       const proc = Bun.spawn(['sh', '-c', cmd], {
         stdout: 'pipe',

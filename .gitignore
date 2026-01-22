@@ -1,6 +1,8 @@
 node_modules
 bun.lock
 yarn.lock
+tsconfig.tsbuildinfo
+.turbo
 
 # Yarn
 .yarn/*

@@ -4,7 +4,7 @@ import { tool } from '@opencode-ai/plugin';
  * List available package.json scripts
  */
 export default tool({
-  description: 'List available npm/pnpm scripts from package.json',
+  description: 'List available npm/yarn scripts from package.json',
   args: {
     filter: tool.schema
       .string()

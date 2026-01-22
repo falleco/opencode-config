@@ -24,16 +24,16 @@ Run all checks in parallel:
 
 ```bash
 # Type check
-pnpm exec tsc --noEmit
+yarn exec tsc --noEmit
 
 # Lint
-pnpm run lint || true
+yarn run lint || true
 
 # Tests (if fast)
-pnpm test --run || true
+yarn test --run || true
 
 # Build (catches runtime issues)
-pnpm run build || true
+yarn run build || true
 ```
 
 ## Step 3: Check for Common Mistakes

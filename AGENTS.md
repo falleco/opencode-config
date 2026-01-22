@@ -12,7 +12,7 @@ Israel Crisanto — Next.js/React-first, backend developer, systems thinker, hat
 
 Use official CLIs for any new config or project setup. Never hand-write configs.
 
-- `package.json` → `pnpm init` / `npm init`
+- `package.json` → `pnpm init` / `npm init` / `yarn init`
 - `tsconfig.json` → `tsc --init`
 - `next.config.js` → `create-next-app`
 - `turbo.json` → `create-turbo` / `turbo init`

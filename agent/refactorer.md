@@ -23,7 +23,7 @@ You receive:
 
 1. **Pattern description** - what to change (before → after)
 2. **Scope** - which files/directories (defaults to `src/`)
-3. **Verification** - how to verify (defaults to `pnpm exec tsc --noEmit`)
+3. **Verification** - how to verify (defaults to `yarn exec tsc --noEmit`)
 
 ## Execution Flow
 
@@ -117,7 +117,7 @@ AFTER:
 1. Read the file
 2. Find all instances of the old pattern
 3. Apply the transformation
-4. Verify the file still compiles: `pnpm exec tsc --noEmit FILE_PATH`
+4. Verify the file still compiles: `yarn exec tsc --noEmit FILE_PATH`
 5. Return: {file, instances_changed, success, error?}
 "
 )
@@ -135,13 +135,13 @@ After all Tasks complete, verify the codebase:
 
 ```bash
 # Full type check
-pnpm exec tsc --noEmit
+yarn exec tsc --noEmit
 
 # Lint check
-pnpm run lint 2>&1 || true
+yarn run lint 2>&1 || true
 
 # Run tests if they exist
-pnpm test 2>&1 | head -50 || true
+yarn test 2>&1 | head -50 || true
 ```
 
 ### Phase 6: Cleanup
@@ -249,7 +249,7 @@ If some files fail:
 
 If tsc fails after migration:
 
-1. Run `pnpm exec tsc --noEmit 2>&1 | head -50` to identify errors
+1. Run `yarn exec tsc --noEmit 2>&1 | head -50` to identify errors
 2. Spawn fix agents for specific files
 3. If systemic, rollback: `git checkout -- .`
 

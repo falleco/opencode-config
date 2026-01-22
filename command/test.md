@@ -107,7 +107,7 @@ describe('functionName', () => {
 
 ```bash
 # Run the tests
-pnpm test <test-file-path> --run
+yarn test <test-file-path> --run
 
 # Or with vitest directly
 npx vitest run <test-file-path>
@@ -166,5 +166,5 @@ After generating tests, report:
 
 ### Run Command
 
-`pnpm test [test-file-path]`
+`yarn test [test-file-path]`
 ```
