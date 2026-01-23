@@ -1,0 +1,27 @@
+services:
+  opencode:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.opencode
+    container_name: opencode-web
+    # Load environment variables from root .env file
+    env_file:
+      - .env
+    ports:
+      - "${OPENCODE_PORT:-4096}:4096"
+      - "1455:1455"
+    volumes:
+      # Map the opencode folder to the container
+      - ./opencode:/home/opencode/.config/opencode
+      - /Users/falleco/projects/ai:/home/opencode/.config/opencode/projects
+      # Map OpenCode auth directory for persistence
+      - ./.state:/home/opencode/.local/share/opencode
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - OPENCODE_CONFIG=${OPENCODE_CONFIG:-/home/opencode/.config/opencode/opencode.jsonc}
+      - OPENCODE_CONFIG_DIR=${OPENCODE_CONFIG_DIR:-/home/opencode/.config/opencode}
+      - OPENCODE_WEB_HOST=${OPENCODE_WEB_HOST:-0.0.0.0}
+    restart: unless-stopped
+
+volumes:
+  opencode-auth:

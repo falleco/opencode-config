@@ -1,0 +1,107 @@
+# Start from the latest official Alpine Linux release
+FROM alpine:latest
+
+ENV OPENCODE_CONFIG=/home/opencode/.config/opencode/opencode.jsonc
+ENV OPENCODE_CONFIG_DIR=/home/opencode/.config/opencode
+ENV OPENCODE_WEB_HOST=0.0.0.0
+
+EXPOSE 4096
+EXPOSE 1455
+
+# Install core tools
+RUN apk add --no-cache \
+    # Core utilities needed for setup and the curl install script
+    wget \
+    vim \
+    ca-certificates \
+    curl \
+    unzip \
+    gnupg \
+    sudo \
+    openssh-client \
+    bash \
+    git
+
+# Detect architecture for cross-platform support (for GitHub CLI)
+RUN ARCH=$(uname -m) \
+    && if [ "$ARCH" = "x86_64" ]; then \
+    GH_ARCH="amd64"; \
+    elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
+    GH_ARCH="arm64"; \
+    else \
+    echo "Unsupported architecture: $ARCH"; \
+    exit 1; \
+    fi \
+    && echo "$GH_ARCH" > /tmp/gh_arch
+
+# Install GitHub CLI (gh) for Alpine
+RUN GH_VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": "v\(.*\)".*/\1/') \
+    && GH_ARCH=$(cat /tmp/gh_arch) \
+    && wget -O gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz" \
+    && tar -xzf gh.tar.gz \
+    && mv gh_*_linux_${GH_ARCH}/bin/gh /usr/local/bin/gh \
+    && rm -rf gh.tar.gz gh_*_linux_${GH_ARCH} /tmp/gh_arch
+
+# Install Node.js via Alpine's package manager
+# Enable community repository and install Node.js (will be v22 or latest available)
+RUN apk add --no-cache nodejs npm \
+    && node --version \
+    && npm --version
+
+# Enable corepack if available (comes with Node.js, but may not be in Alpine's package)
+RUN command -v corepack >/dev/null 2>&1 && corepack enable || npm install -g corepack && corepack enable
+
+# Create the 'opencode' user and add to sudo group
+# The sudo package creates the sudo group
+RUN adduser -D -s /bin/bash opencode \
+    && sed -i '/^sudo:/s/$/,opencode/' /etc/group \
+    && echo "opencode ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/opencode \
+    && chmod 0440 /etc/sudoers.d/opencode
+
+# Set the 'opencode' user as the default user
+USER opencode
+
+# Set the working directory to the user's home folder
+WORKDIR /home/opencode
+
+# 1. Create the .ssh directory with proper permissions
+RUN mkdir -p /home/opencode/.ssh \
+    && chmod 700 /home/opencode/.ssh
+
+# 2. Add GitHub to the known_hosts file so git commands work non-interactively
+# We use ssh-keyscan to fetch GitHub's public key and save it.
+RUN ssh-keyscan github.com >> /home/opencode/.ssh/known_hosts
+
+# Create the directory structure for the auth file and fix ownership
+# This prevents Docker from creating it as 'root' when the volume is mounted.
+# This is important to be able to mount the OpenCode auth on docker run
+#    -v ~/.local/share/opencode/auth.json:/home/opencode/.local/share/opencode/auth.json
+RUN mkdir -p /home/opencode/.local/share/opencode \
+    && chown -R opencode:opencode /home/opencode/.local/share/opencode
+
+RUN mkdir -p /home/opencode/.config/opencode \
+    && chown -R opencode:opencode /home/opencode/.config/opencode
+
+# copy the project dir into the VM    
+COPY --chown=opencode:opencode . /home/opencode/
+
+# Copy and make the start script executable
+COPY --chown=opencode:opencode docker/scripts/start-opencode.sh /home/opencode/start-opencode.sh
+RUN chmod +x /home/opencode/start-opencode.sh
+
+# Install Bun for the opencode user
+RUN curl -fsSL https://bun.sh/install | bash
+
+# Install OpenCode AI (Native Binary Method
+# https://opencode.ai/docs/
+RUN wget https://opencode.ai/install -O opencode-install.sh \
+    && bash opencode-install.sh ${OPENCODE_VERSION:+--version $OPENCODE_VERSION} \
+    && rm opencode-install.sh
+
+# RUN curl -fsSL https://opencode.ai/install | bash
+
+# Add opencode and bun bin directories to PATH
+ENV PATH="/home/opencode/.opencode/bin:/home/opencode/.bun/bin:${PATH}"
+
+# Set the default command to run the start script
+CMD ["/home/opencode/start-opencode.sh"]
