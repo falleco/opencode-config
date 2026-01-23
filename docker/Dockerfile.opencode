@@ -20,7 +20,8 @@ RUN apk add --no-cache \
     sudo \
     openssh-client \
     bash \
-    git
+    git \
+    docker-cli
 
 # Detect architecture for cross-platform support (for GitHub CLI)
 RUN ARCH=$(uname -m) \

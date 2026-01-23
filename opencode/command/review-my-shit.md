@@ -24,16 +24,16 @@ Run all checks in parallel:
 
 ```bash
 # Type check
-yarn exec tsc --noEmit
+bun x tsc --noEmit
 
 # Lint
-yarn run lint || true
+bun run lint || true
 
 # Tests (if fast)
-yarn test --run || true
+bun test || true
 
 # Build (catches runtime issues)
-yarn run build || true
+bun run build || true
 ```
 
 ## Step 3: Check for Common Mistakes

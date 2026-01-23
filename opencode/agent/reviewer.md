@@ -29,7 +29,7 @@ permission:
     "echo *": deny
     "npm *": deny
     "pnpm *": deny
-    "yarn *": deny
+    "bun *": deny
     "node *": deny
     "*": deny
 ---

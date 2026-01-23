@@ -10,18 +10,48 @@ services:
     ports:
       - "${OPENCODE_PORT:-4096}:4096"
       - "1455:1455"
+    depends_on:
+      - opencode-dind
     volumes:
       # Map the opencode folder to the container
       - ./opencode:/home/opencode/.config/opencode
-      - /Users/falleco/projects/ai:/home/opencode/.config/opencode/projects
+      - /Users/falleco/projects/ai:/home/opencode/projects
       # Map OpenCode auth directory for persistence
       - ./.state:/home/opencode/.local/share/opencode
+      # Docker TLS certs from dind
+      - opencode-dind-certs:/certs:ro
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
       - OPENCODE_CONFIG=${OPENCODE_CONFIG:-/home/opencode/.config/opencode/opencode.jsonc}
       - OPENCODE_CONFIG_DIR=${OPENCODE_CONFIG_DIR:-/home/opencode/.config/opencode}
       - OPENCODE_WEB_HOST=${OPENCODE_WEB_HOST:-0.0.0.0}
+    networks:
+      - opencode-net
+    restart: unless-stopped
+
+  opencode-dind:
+    image: docker:27-dind
+    container_name: opencode-dind
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - opencode-dind-data:/var/lib/docker
+      - opencode-dind-certs:/certs
+      - /Users/falleco/projects/ai:/home/opencode/projects
+    networks:
+      opencode-net:
+        aliases:
+          - docker
     restart: unless-stopped
 
 volumes:
   opencode-auth:
+  opencode-dind-data:
+  opencode-dind-certs:
+
+networks:
+  opencode-net:

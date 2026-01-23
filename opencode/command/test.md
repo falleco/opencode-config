@@ -107,10 +107,10 @@ describe('functionName', () => {
 
 ```bash
 # Run the tests
-yarn test <test-file-path> --run
+bun test <test-file-path>
 
 # Or with vitest directly
-npx vitest run <test-file-path>
+bun x vitest run <test-file-path>
 ```
 
 ## Test Writing Guidelines
@@ -166,5 +166,5 @@ After generating tests, report:
 
 ### Run Command
 
-`yarn test [test-file-path]`
+`bun test [test-file-path]`
 ```

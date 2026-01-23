@@ -133,7 +133,9 @@
           "wc *": "allow",
           "head *": "allow",
           "tail *": "allow",
-          "yarn run*": "allow",
+          "bun run*": "allow",
+          "bun test*": "allow",
+          "bun x*": "allow",
           "*": "deny"
         }
       }

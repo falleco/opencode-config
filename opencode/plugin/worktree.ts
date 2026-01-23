@@ -733,7 +733,7 @@ async function loadWorktreeConfig(
 
   "hooks": {
     // Commands to run after worktree creation
-    // Example: ["yarn install", "docker compose up -d"]
+    // Example: ["bun install", "docker compose up -d"]
     "postCreate": [],
 
     // Commands to run before worktree deletion

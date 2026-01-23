@@ -80,7 +80,7 @@ Version management:
 
 Ecosystem expertise:
 
-- NPM/Yarn workspaces
+- NPM/Bun workspaces
 - Python virtual environments
 - Maven dependency management
 - Gradle dependency resolution
@@ -158,7 +158,7 @@ Supply chain security:
 ## MCP Tool Suite
 
 - **npm**: Node.js package management
-- **yarn**: Fast, reliable JavaScript packages
+- **bun**: Fast, reliable JavaScript packages
 - **pip**: Python package installer
 - **maven**: Java dependency management
 - **gradle**: Build automation and dependencies

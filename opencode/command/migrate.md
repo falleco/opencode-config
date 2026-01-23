@@ -106,10 +106,10 @@ Output preview and stop.
 
 ```bash
 # Type check
-yarn tsc --noEmit
+bun x tsc --noEmit
 
 # Run tests
-yarn test --run
+bun test
 
 # Verify no occurrences remain (unless intentional)
 rg "<from-pattern>" --type-add 'code:*.{ts,tsx,js,jsx,mjs,cjs}' -t code || echo "Migration complete - no occurrences found"

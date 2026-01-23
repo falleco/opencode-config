@@ -1,0 +1,17 @@
+node_modules
+bun.lock
+yarn.lock
+tsconfig.tsbuildinfo
+.turbo
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# State
+.state/*
+!.state/.gitkeep
