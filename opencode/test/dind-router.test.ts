@@ -2,6 +2,12 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildContainerName,
   buildDockerExecCommand,
+  buildGrepCommand,
+  buildGlobCommand,
+  buildListCommand,
+  buildReadCommand,
+  formatCommandForLog,
+  mapContainerPathToHost,
   mapHostPathToContainer,
   sanitizeContainerName,
 } from '../plugin/dind-router';
@@ -39,6 +45,18 @@ describe('dind router helpers', () => {
     ).toBe('/workspace');
   });
 
+  it('maps container paths back to host', () => {
+    expect(
+      mapContainerPathToHost('/workspace/packages/app', '/repo', '/workspace'),
+    ).toBe('/repo/packages/app');
+    expect(
+      mapContainerPathToHost('packages/app', '/repo', '/workspace'),
+    ).toBe('/repo/packages/app');
+    expect(
+      mapContainerPathToHost('/outside', '/repo', '/workspace'),
+    ).toBe('/repo');
+  });
+
   it('builds docker exec command with workdir and env', () => {
     const command = buildDockerExecCommand({
       dockerBinary: 'docker',
@@ -70,5 +88,39 @@ describe('dind router helpers', () => {
     expect(missingContainer).toContain('DIND routing failed');
     expect(missingContainer).toContain('exit 1');
     expect(missingCommand).toContain('DIND routing failed');
+  });
+
+  it('formats intercepted commands for logs', () => {
+    const short = formatCommandForLog('ls -la', 10);
+    const long = formatCommandForLog('a'.repeat(50), 10);
+    const empty = formatCommandForLog(undefined as unknown as string, 10);
+
+    expect(short).toBe('ls -la');
+    expect(long).toBe('aaaaaaaaaa...');
+    expect(empty).toBe('');
+  });
+
+  it('builds a safe read command', () => {
+    const command = buildReadCommand('/workspace/app/file.ts');
+    expect(command).toBe('cat -- "/workspace/app/file.ts"');
+  });
+
+  it('builds a safe glob command', () => {
+    const command = buildGlobCommand('*.ts', 25);
+    expect(command).toBe('rg --files -g "*.ts" 2>/dev/null | head -n 25');
+  });
+
+  it('builds a safe list command', () => {
+    const command = buildListCommand('/workspace/app', 50);
+    expect(command).toBe(
+      'ls -A -p -1 -- "/workspace/app" 2>/dev/null | head -n 50',
+    );
+  });
+
+  it('builds a safe grep command', () => {
+    const command = buildGrepCommand('TODO', '*.ts');
+    expect(command).toBe(
+      'rg -nH --field-match-separator=| --regexp "TODO" --glob "*.ts" 2>/dev/null',
+    );
   });
 });

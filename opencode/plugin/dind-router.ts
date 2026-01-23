@@ -10,7 +10,15 @@ import {
   type OpencodeClient,
 } from './kdco-primitives';
 
-const DEFAULT_TOOL_NAMES = ['bash'];
+const DEFAULT_TOOL_NAMES = [
+  'bash',
+  'read',
+  'write',
+  'edit',
+  'glob',
+  'grep',
+  'list',
+];
 const DEFAULT_CONTAINER_PREFIX = 'opencode';
 const STATE_VERSION = 1;
 const MAX_SESSION_CHAIN_DEPTH = 10;
@@ -30,6 +38,9 @@ interface DindConfig {
   dockerBinary: string;
   bypassPrefixes: string[];
   stateFile: string;
+  logging: {
+    debug: boolean;
+  };
   routing: {
     scope: 'root' | 'session';
     fallbackToHost: boolean;
@@ -67,6 +78,13 @@ interface DockerResult {
   exitCode: number;
 }
 
+type DindLogger = {
+  debug: (message: string) => void;
+  info: (message: string) => void;
+  warn: (message: string) => void;
+  error: (message: string) => void;
+};
+
 /**
  * Normalize a string into a safe container name fragment.
  */
@@ -87,6 +105,15 @@ function sanitizeContainerFragment(value: string): string {
 export function sanitizeContainerName(name: string): string {
   const sanitized = sanitizeContainerFragment(name);
   return sanitized || DEFAULT_CONTAINER_PREFIX;
+}
+
+/**
+ * Format a command for logging with length guard.
+ */
+export function formatCommandForLog(command: string, maxLength = 160): string {
+  if (typeof command !== 'string') return '';
+  if (command.length <= maxLength) return command;
+  return `${command.slice(0, maxLength)}...`;
 }
 
 /**
@@ -147,6 +174,42 @@ export function mapHostPathToContainer(
 }
 
 /**
+ * Map a container path back to the host-mounted project path.
+ */
+export function mapContainerPathToHost(
+  containerPath: string,
+  hostRoot: string,
+  containerRoot: string,
+): string {
+  const safeHostRoot =
+    typeof hostRoot === 'string' && hostRoot.length > 0 ? hostRoot : '';
+  const safeContainerRoot =
+    typeof containerRoot === 'string' && containerRoot.length > 0
+      ? containerRoot
+      : '/';
+
+  if (!safeHostRoot) return containerPath;
+  if (typeof containerPath !== 'string' || containerPath.length === 0) {
+    return safeHostRoot;
+  }
+
+  const normalizedRoot = path.resolve(safeContainerRoot);
+  const resolvedContainer = path.isAbsolute(containerPath)
+    ? path.resolve(containerPath)
+    : path.resolve(normalizedRoot, containerPath);
+
+  if (
+    resolvedContainer !== normalizedRoot &&
+    !resolvedContainer.startsWith(`${normalizedRoot}${path.sep}`)
+  ) {
+    return safeHostRoot;
+  }
+
+  const relative = path.relative(normalizedRoot, resolvedContainer);
+  return path.join(safeHostRoot, relative);
+}
+
+/**
  * Build a docker exec command that runs a shell command inside a container.
  */
 export function buildDockerExecCommand({
@@ -184,6 +247,57 @@ export function buildDockerExecCommand({
 }
 
 /**
+ * Build a shell command for reading a file inside a container.
+ */
+export function buildReadCommand(filePath: string): string {
+  const safePath = typeof filePath === 'string' ? filePath : '';
+  return `cat -- "${escapeBash(safePath)}"`;
+}
+
+/**
+ * Build a shell command for listing directory contents inside a container.
+ */
+export function buildListCommand(dirPath: string, limit = 200): string {
+  const safePath = typeof dirPath === 'string' && dirPath.length > 0 ? dirPath : '.';
+  const safeLimit =
+    Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 200;
+  return `ls -A -p -1 -- "${escapeBash(safePath)}" 2>/dev/null | head -n ${safeLimit}`;
+}
+
+/**
+ * Build a shell command for running ripgrep inside a container.
+ */
+export function buildGrepCommand(pattern: string, include?: string): string {
+  const safePattern = typeof pattern === 'string' ? pattern.trim() : '';
+  if (!safePattern) return '';
+
+  const args = [
+    'rg',
+    '-nH',
+    '--field-match-separator=|',
+    '--regexp',
+    `"${escapeBash(safePattern)}"`,
+  ];
+
+  if (typeof include === 'string' && include.trim().length > 0) {
+    args.push('--glob', `"${escapeBash(include.trim())}"`);
+  }
+
+  return `${args.join(' ')} 2>/dev/null`;
+}
+
+/**
+ * Build a shell command for globbing files inside a container.
+ */
+export function buildGlobCommand(pattern?: string, limit = 100): string {
+  const safePattern = typeof pattern === 'string' ? pattern.trim() : '';
+  const base = safePattern
+    ? `rg --files -g "${escapeBash(safePattern)}"`
+    : 'rg --files';
+  return `${base} 2>/dev/null | head -n ${limit}`;
+}
+
+/**
  * Resolve the project root from plugin context.
  */
 function resolveProjectRoot(ctx: {
@@ -194,6 +308,47 @@ function resolveProjectRoot(ctx: {
   return (
     ctx.worktree || ctx.project?.worktree || ctx.directory || process.cwd()
   );
+}
+
+/**
+ * Resolve a host path within the project root (returns null if outside).
+ */
+function resolveHostPathInProject(
+  projectRoot: string,
+  targetPath: string,
+): string | null {
+  if (!projectRoot || typeof targetPath !== 'string' || targetPath.length === 0) {
+    return null;
+  }
+
+  const normalizedRoot = path.resolve(projectRoot);
+  const resolvedTarget = path.isAbsolute(targetPath)
+    ? path.resolve(targetPath)
+    : path.resolve(normalizedRoot, targetPath);
+
+  if (
+    resolvedTarget !== normalizedRoot &&
+    !resolvedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+  ) {
+    return null;
+  }
+
+  return resolvedTarget;
+}
+
+/**
+ * Pick the first non-empty string from args for the provided keys.
+ */
+function pickFirstStringArg(
+  args: Record<string, unknown> | undefined,
+  keys: string[],
+): string | undefined {
+  if (!args) return undefined;
+  for (const key of keys) {
+    const value = args[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return undefined;
 }
 
 /**
@@ -215,6 +370,11 @@ async function loadConfig(
     dockerBinary: z.string().optional(),
     bypassPrefixes: z.array(z.string()).optional(),
     stateFile: z.string().optional(),
+    logging: z
+      .object({
+        debug: z.boolean().optional(),
+      })
+      .optional(),
     routing: z
       .object({
         scope: z.enum(['root', 'session']).optional(),
@@ -269,6 +429,8 @@ async function loadConfig(
     'dind',
     'state.json',
   );
+  const envDebug = process.env.OPENCODE_DIND_DEBUG;
+  const debugEnabled = envDebug ? envDebug !== 'false' : true;
   const envToolNames = process.env.OPENCODE_DIND_TOOL_NAMES
     ? process.env.OPENCODE_DIND_TOOL_NAMES.split(',')
         .map((name) => name.trim())
@@ -289,6 +451,9 @@ async function loadConfig(
     dockerBinary: process.env.OPENCODE_DIND_DOCKER_BIN || 'docker',
     bypassPrefixes: ['docker '],
     stateFile: defaultStateFile,
+    logging: {
+      debug: debugEnabled,
+    },
     routing: {
       scope: process.env.OPENCODE_DIND_SCOPE === 'session' ? 'session' : 'root',
       fallbackToHost: process.env.OPENCODE_DIND_FALLBACK === 'true',
@@ -296,7 +461,7 @@ async function loadConfig(
     container: {
       name: process.env.OPENCODE_DIND_CONTAINER || undefined,
       namePrefix: process.env.OPENCODE_DIND_PREFIX || DEFAULT_CONTAINER_PREFIX,
-      image: process.env.OPENCODE_DIND_IMAGE || 'ubuntu:22.04',
+      image: process.env.OPENCODE_DIND_IMAGE || 'opencode-worker:latest',
       workdir: process.env.OPENCODE_DIND_WORKDIR || '/workspace',
       projectPath: process.env.OPENCODE_DIND_PROJECT_PATH || undefined,
       network: process.env.OPENCODE_DIND_NETWORK || undefined,
@@ -323,6 +488,10 @@ function mergeConfig(defaults: DindConfig, overrides: unknown): DindConfig {
     ...raw,
     toolNames: raw.toolNames || defaults.toolNames,
     bypassPrefixes: raw.bypassPrefixes || defaults.bypassPrefixes,
+    logging: {
+      ...defaults.logging,
+      ...(raw.logging || {}),
+    },
     routing: {
       ...defaults.routing,
       ...raw.routing,
@@ -343,18 +512,13 @@ function mergeConfig(defaults: DindConfig, overrides: unknown): DindConfig {
 /**
  * Create a scoped logger for the plugin.
  */
-function createLogger(client: OpencodeClient) {
+function createLogger(debugEnabled = true): DindLogger {
   return {
     debug: (message: string) =>
-      client.app.log({
-        body: { service: 'dind', level: 'debug', message },
-      }),
-    info: (message: string) =>
-      client.app.log({ body: { service: 'dind', level: 'info', message } }),
-    warn: (message: string) =>
-      client.app.log({ body: { service: 'dind', level: 'warn', message } }),
-    error: (message: string) =>
-      client.app.log({ body: { service: 'dind', level: 'error', message } }),
+      void (debugEnabled ? console.log(message) : undefined),
+    info: (message: string) => void console.log(message),
+    warn: (message: string) => void console.warn(message),
+    error: (message: string) => void console.error(message),
   };
 }
 
@@ -416,6 +580,85 @@ async function runDocker(
     stderr: stderr.trim(),
     exitCode,
   };
+}
+
+/**
+ * Execute a command inside a running container.
+ */
+async function runDockerExec(
+  config: DindConfig,
+  input: {
+    container: string;
+    command: string;
+    workdir?: string;
+    env?: Record<string, string>;
+  },
+): Promise<DockerResult> {
+  const args = ['exec', '-i'];
+
+  if (input.workdir) {
+    args.push('--workdir', input.workdir);
+  }
+
+  for (const [key, value] of Object.entries(input.env || {})) {
+    if (value == null) continue;
+    args.push('-e', `${key}=${value}`);
+  }
+
+  args.push(input.container, 'sh', '-lc', input.command);
+  return runDocker(config.dockerBinary, args);
+}
+
+/**
+ * Sync a host file into a running container.
+ */
+async function syncFileToContainer(
+  config: DindConfig,
+  input: { container: string; hostPath: string; containerPath: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const hostExists = await fs
+    .stat(input.hostPath)
+    .then(() => true)
+    .catch(() => false);
+
+  if (!hostExists) {
+    return {
+      ok: false,
+      error: `Host file ${input.hostPath} not found`,
+    };
+  }
+
+  const containerDir = path.posix.dirname(input.containerPath);
+  if (containerDir && containerDir !== '/') {
+    const mkdirResult = await runDockerExec(config, {
+      container: input.container,
+      command: `mkdir -p "${escapeBash(containerDir)}"`,
+    });
+    if (!mkdirResult.ok) {
+      return {
+        ok: false,
+        error:
+          mkdirResult.stderr ||
+          mkdirResult.stdout ||
+          'Failed to create container directory',
+      };
+    }
+  }
+
+  const copyResult = await runDocker(config.dockerBinary, [
+    'cp',
+    input.hostPath,
+    `${input.container}:${input.containerPath}`,
+  ]);
+
+  if (!copyResult.ok) {
+    return {
+      ok: false,
+      error: copyResult.stderr || copyResult.stdout || 'docker cp failed',
+    };
+  }
+
+  return { ok: true };
 }
 
 /**
@@ -559,6 +802,7 @@ async function ensureContainerRunning(
     command?: string[];
     labels?: Record<string, string>;
   },
+  log?: DindLogger,
   options: { allowCreate?: boolean } = {},
 ): Promise<{ ok: boolean; created: boolean; error?: string }> {
   const allowCreate = options.allowCreate ?? config.container.autoCreate;
@@ -596,6 +840,10 @@ async function ensureContainerRunning(
       };
     }
 
+    log?.info(
+      `[dind] Container created: ${input.name} (image=${input.image}, workdir=${input.workdir}, projectPath=${input.projectPath ?? 'n/a'})`,
+    );
+
     return { ok: true, created: true };
   }
 
@@ -608,6 +856,8 @@ async function ensureContainerRunning(
         error: started.stderr || started.stdout || 'Container start failed',
       };
     }
+
+    log?.info(`[dind] Container started: ${input.name}`);
   }
 
   return { ok: true, created: false };
@@ -717,6 +967,7 @@ function createContainerCreateTool(
     projectRoot: string;
     scopeCache: Map<string, string>;
     stateMutex: Mutex;
+    log: DindLogger;
   },
 ) {
   return tool({
@@ -779,6 +1030,7 @@ function createContainerCreateTool(
             ? buildContainerLabels(context.projectId, scopeId)
             : undefined,
         },
+        context.log,
         { allowCreate: true },
       );
 
@@ -792,6 +1044,9 @@ function createContainerCreateTool(
           context.stateMutex,
           scopeId,
           name,
+        );
+        context.log.info(
+          `[dind] Session scope ${scopeId} mapped to container ${name}`,
         );
       }
 
@@ -811,6 +1066,7 @@ function createContainerUseTool(
     client: OpencodeClient;
     scopeCache: Map<string, string>;
     stateMutex: Mutex;
+    log: DindLogger;
   },
 ) {
   return tool({
@@ -843,6 +1099,9 @@ function createContainerUseTool(
         scopeId,
         args.name,
       );
+      context.log.info(
+        `[dind] Session scope ${scopeId} mapped to container ${args.name}`,
+      );
       return `Session routed to container ${args.name}.`;
     },
   });
@@ -857,6 +1116,7 @@ function createContainerClearTool(
     client: OpencodeClient;
     scopeCache: Map<string, string>;
     stateMutex: Mutex;
+    log: DindLogger;
   },
 ) {
   return tool({
@@ -889,14 +1149,19 @@ function createContainerClearTool(
 
       if (args.remove) {
         await runDocker(config.dockerBinary, ['rm', '-f', container]);
+        context.log.info(`[dind] Removed container ${container}`);
         return `Routing cleared and container ${container} removed.`;
       }
 
       if (args.stop) {
         await runDocker(config.dockerBinary, ['stop', container]);
+        context.log.info(`[dind] Stopped container ${container}`);
         return `Routing cleared and container ${container} stopped.`;
       }
 
+      context.log.info(
+        `[dind] Routing cleared for session scope ${scopeId} (container ${container})`,
+      );
       return `Routing cleared for container ${container}.`;
     },
   });
@@ -985,8 +1250,11 @@ function createContainerListTool(
 // ==========================================
 
 export const DindRouterPlugin: Plugin = async (ctx) => {
-  const log = createLogger(ctx.client as OpencodeClient);
+  const envDebug = process.env.OPENCODE_DIND_DEBUG;
+  const debugEnabled = envDebug ? envDebug !== 'false' : true;
+  let log = createLogger(debugEnabled);
   const config = await loadConfig(ctx, log);
+  log = createLogger(config.logging.debug);
   const projectRoot = resolveProjectRoot(ctx);
   const projectId = await getProjectId(
     projectRoot,
@@ -994,6 +1262,41 @@ export const DindRouterPlugin: Plugin = async (ctx) => {
   );
   const scopeCache = new Map<string, string>();
   const stateMutex = new Mutex();
+  const readRequests = new Map<
+    string,
+    { container: string; containerPath: string; hostPath: string }
+  >();
+  const globRequests = new Map<
+    string,
+    {
+      container: string;
+      hostRoot: string;
+      containerRoot: string;
+      pattern: string;
+    }
+  >();
+  const listRequests = new Map<
+    string,
+    { container: string; hostPath: string; containerPath: string }
+  >();
+  const grepRequests = new Map<
+    string,
+    {
+      container: string;
+      hostRoot: string;
+      containerRoot: string;
+      pattern: string;
+      include?: string;
+    }
+  >();
+  const writeRequests = new Map<
+    string,
+    { container: string; hostPath: string; containerPath: string }
+  >();
+  const editRequests = new Map<
+    string,
+    { container: string; hostPath: string; containerPath: string }
+  >();
 
   return {
     tool: {
@@ -1003,16 +1306,19 @@ export const DindRouterPlugin: Plugin = async (ctx) => {
         projectRoot,
         scopeCache,
         stateMutex,
+        log,
       }),
       dind_container_use: createContainerUseTool(config, {
         client: ctx.client as OpencodeClient,
         scopeCache,
         stateMutex,
+        log,
       }),
       dind_container_clear: createContainerClearTool(config, {
         client: ctx.client as OpencodeClient,
         scopeCache,
         stateMutex,
+        log,
       }),
       dind_container_info: createContainerInfoTool(config, {
         client: ctx.client as OpencodeClient,
@@ -1023,20 +1329,663 @@ export const DindRouterPlugin: Plugin = async (ctx) => {
     },
 
     'tool.execute.before': async (
-      input: { tool: string; sessionID: string },
+      input: { tool: string; sessionID: string; callID?: string },
       output: {
-        args?: { command?: string; cwd?: string; env?: Record<string, string> };
+        args?: {
+          [key: string]: unknown;
+          command?: string;
+          cwd?: string;
+          env?: Record<string, string>;
+          filePath?: string;
+          pattern?: string;
+          path?: string;
+          include?: string;
+          content?: string;
+          text?: string;
+          dir?: string;
+          directory?: string;
+        };
       },
     ) => {
-      if (!config.enabled) return;
-      if (!config.toolNames.includes(input.tool)) return;
-      if (!output.args?.command) return;
-      if (!shouldInterceptCommand(output.args.command, config)) return;
+      if (!config.enabled) {
+        log.debug('[dind] Skip: plugin disabled');
+        return;
+      }
 
-      console.log('Command Intercepted', output.args.command);
+      if (!config.toolNames.includes(input.tool)) {
+        log.debug(`[dind] Skip: tool not routed (${input.tool})`);
+        return;
+      }
+
+      if (input.tool === 'read') {
+        const filePath =
+          typeof output.args?.filePath === 'string' ? output.args.filePath : '';
+        if (!filePath) {
+          log.debug('[dind] Skip read: missing filePath');
+          return;
+        }
+        if (!input.callID) {
+          log.debug('[dind] Skip read: missing callID');
+          return;
+        }
+
+        const sessionId = input.sessionID;
+        if (!sessionId) {
+          log.debug('[dind] Skip read: missing sessionID');
+          return;
+        }
+
+        const scopeId = await resolveScopeId(
+          config,
+          ctx.client as OpencodeClient,
+          sessionId,
+          scopeCache,
+        );
+
+        let containerName = config.container.name;
+        if (!containerName) {
+          containerName =
+            (await getMappedContainer(config.stateFile, stateMutex, scopeId)) ||
+            undefined;
+        }
+
+        if (!containerName && config.container.autoCreate) {
+          containerName = buildContainerName(
+            config.container.namePrefix,
+            projectId,
+            scopeId,
+          );
+        }
+
+        if (!containerName) {
+          log.debug(`[dind] Skip read: no container for scope ${scopeId}`);
+          return;
+        }
+
+        const projectPath = resolveProjectPath(config, projectRoot);
+        const ensure = await ensureContainerRunning(
+          config,
+          {
+            name: containerName,
+            image: config.container.image,
+            workdir: config.container.workdir,
+            projectPath,
+            network: config.container.network,
+            mounts: config.container.mounts,
+            labels: buildContainerLabels(projectId, scopeId),
+          },
+          log,
+        );
+
+        if (!ensure.ok) {
+          log.warn(
+            `[dind] Read: container unavailable ${containerName}: ${ensure.error}`,
+          );
+          if (config.routing.fallbackToHost) return;
+          return;
+        }
+
+        if (config.container.autoCreate) {
+          await setMappedContainer(
+            config.stateFile,
+            stateMutex,
+            scopeId,
+            containerName,
+          );
+          log.info(
+            `[dind] Session scope ${scopeId} mapped to container ${containerName}`,
+          );
+        }
+
+        const mappedPath = mapHostPathToContainer(
+          filePath,
+          projectRoot,
+          config.container.workdir,
+        );
+        readRequests.set(input.callID, {
+          container: containerName,
+          containerPath: mappedPath,
+          hostPath: filePath,
+        });
+        log.info(
+          `[dind] Routed read to ${containerName} (host=${filePath}, container=${mappedPath})`,
+        );
+        return;
+      }
+
+      if (input.tool === 'write') {
+        const filePath = pickFirstStringArg(output.args, [
+          'filePath',
+          'path',
+        ]);
+        if (!filePath) {
+          log.debug('[dind] Skip write: missing filePath');
+          return;
+        }
+        if (!input.callID) {
+          log.debug('[dind] Skip write: missing callID');
+          return;
+        }
+
+        const sessionId = input.sessionID;
+        if (!sessionId) {
+          log.debug('[dind] Skip write: missing sessionID');
+          return;
+        }
+
+        const hostPath = resolveHostPathInProject(projectRoot, filePath);
+        if (!hostPath) {
+          log.debug(`[dind] Skip write: path outside project (${filePath})`);
+          return;
+        }
+
+        const scopeId = await resolveScopeId(
+          config,
+          ctx.client as OpencodeClient,
+          sessionId,
+          scopeCache,
+        );
+
+        let containerName = config.container.name;
+        if (!containerName) {
+          containerName =
+            (await getMappedContainer(config.stateFile, stateMutex, scopeId)) ||
+            undefined;
+        }
+
+        if (!containerName && config.container.autoCreate) {
+          containerName = buildContainerName(
+            config.container.namePrefix,
+            projectId,
+            scopeId,
+          );
+        }
+
+        if (!containerName) {
+          log.debug(`[dind] Skip write: no container for scope ${scopeId}`);
+          return;
+        }
+
+        const projectPath = resolveProjectPath(config, projectRoot);
+        const ensure = await ensureContainerRunning(
+          config,
+          {
+            name: containerName,
+            image: config.container.image,
+            workdir: config.container.workdir,
+            projectPath,
+            network: config.container.network,
+            mounts: config.container.mounts,
+            labels: buildContainerLabels(projectId, scopeId),
+          },
+          log,
+        );
+
+        if (!ensure.ok) {
+          log.warn(
+            `[dind] Write: container unavailable ${containerName}: ${ensure.error}`,
+          );
+          if (config.routing.fallbackToHost) return;
+          return;
+        }
+
+        if (config.container.autoCreate) {
+          await setMappedContainer(
+            config.stateFile,
+            stateMutex,
+            scopeId,
+            containerName,
+          );
+          log.info(
+            `[dind] Session scope ${scopeId} mapped to container ${containerName}`,
+          );
+        }
+
+        const containerPath = mapHostPathToContainer(
+          hostPath,
+          projectRoot,
+          config.container.workdir,
+        );
+        writeRequests.set(input.callID, {
+          container: containerName,
+          hostPath,
+          containerPath,
+        });
+        log.info(
+          `[dind] Routed write to ${containerName} (host=${hostPath}, container=${containerPath})`,
+        );
+        return;
+      }
+
+      if (input.tool === 'edit') {
+        const filePath = pickFirstStringArg(output.args, [
+          'filePath',
+          'path',
+        ]);
+        if (!filePath) {
+          log.debug('[dind] Skip edit: missing filePath');
+          return;
+        }
+        if (!input.callID) {
+          log.debug('[dind] Skip edit: missing callID');
+          return;
+        }
+
+        const sessionId = input.sessionID;
+        if (!sessionId) {
+          log.debug('[dind] Skip edit: missing sessionID');
+          return;
+        }
+
+        const hostPath = resolveHostPathInProject(projectRoot, filePath);
+        if (!hostPath) {
+          log.debug(`[dind] Skip edit: path outside project (${filePath})`);
+          return;
+        }
+
+        const scopeId = await resolveScopeId(
+          config,
+          ctx.client as OpencodeClient,
+          sessionId,
+          scopeCache,
+        );
+
+        let containerName = config.container.name;
+        if (!containerName) {
+          containerName =
+            (await getMappedContainer(config.stateFile, stateMutex, scopeId)) ||
+            undefined;
+        }
+
+        if (!containerName && config.container.autoCreate) {
+          containerName = buildContainerName(
+            config.container.namePrefix,
+            projectId,
+            scopeId,
+          );
+        }
+
+        if (!containerName) {
+          log.debug(`[dind] Skip edit: no container for scope ${scopeId}`);
+          return;
+        }
+
+        const projectPath = resolveProjectPath(config, projectRoot);
+        const ensure = await ensureContainerRunning(
+          config,
+          {
+            name: containerName,
+            image: config.container.image,
+            workdir: config.container.workdir,
+            projectPath,
+            network: config.container.network,
+            mounts: config.container.mounts,
+            labels: buildContainerLabels(projectId, scopeId),
+          },
+          log,
+        );
+
+        if (!ensure.ok) {
+          log.warn(
+            `[dind] Edit: container unavailable ${containerName}: ${ensure.error}`,
+          );
+          if (config.routing.fallbackToHost) return;
+          return;
+        }
+
+        if (config.container.autoCreate) {
+          await setMappedContainer(
+            config.stateFile,
+            stateMutex,
+            scopeId,
+            containerName,
+          );
+          log.info(
+            `[dind] Session scope ${scopeId} mapped to container ${containerName}`,
+          );
+        }
+
+        const containerPath = mapHostPathToContainer(
+          hostPath,
+          projectRoot,
+          config.container.workdir,
+        );
+        editRequests.set(input.callID, {
+          container: containerName,
+          hostPath,
+          containerPath,
+        });
+        log.info(
+          `[dind] Routed edit to ${containerName} (host=${hostPath}, container=${containerPath})`,
+        );
+        return;
+      }
+
+      if (input.tool === 'glob') {
+        const pattern =
+          typeof output.args?.pattern === 'string' ? output.args.pattern : '';
+        if (!pattern) {
+          log.debug('[dind] Skip glob: missing pattern');
+          return;
+        }
+        if (!input.callID) {
+          log.debug('[dind] Skip glob: missing callID');
+          return;
+        }
+
+        const sessionId = input.sessionID;
+        if (!sessionId) {
+          log.debug('[dind] Skip glob: missing sessionID');
+          return;
+        }
+
+        const scopeId = await resolveScopeId(
+          config,
+          ctx.client as OpencodeClient,
+          sessionId,
+          scopeCache,
+        );
+
+        let containerName = config.container.name;
+        if (!containerName) {
+          containerName =
+            (await getMappedContainer(config.stateFile, stateMutex, scopeId)) ||
+            undefined;
+        }
+
+        if (!containerName && config.container.autoCreate) {
+          containerName = buildContainerName(
+            config.container.namePrefix,
+            projectId,
+            scopeId,
+          );
+        }
+
+        if (!containerName) {
+          log.debug(`[dind] Skip glob: no container for scope ${scopeId}`);
+          return;
+        }
+
+        const projectPath = resolveProjectPath(config, projectRoot);
+        const ensure = await ensureContainerRunning(
+          config,
+          {
+            name: containerName,
+            image: config.container.image,
+            workdir: config.container.workdir,
+            projectPath,
+            network: config.container.network,
+            mounts: config.container.mounts,
+            labels: buildContainerLabels(projectId, scopeId),
+          },
+          log,
+        );
+
+        if (!ensure.ok) {
+          log.warn(
+            `[dind] Glob: container unavailable ${containerName}: ${ensure.error}`,
+          );
+          if (config.routing.fallbackToHost) return;
+          return;
+        }
+
+        if (config.container.autoCreate) {
+          await setMappedContainer(
+            config.stateFile,
+            stateMutex,
+            scopeId,
+            containerName,
+          );
+          log.info(
+            `[dind] Session scope ${scopeId} mapped to container ${containerName}`,
+          );
+        }
+
+        const hostRoot =
+          typeof output.args?.path === 'string' && output.args.path.length > 0
+            ? output.args.path
+            : projectRoot;
+        const containerRoot = mapHostPathToContainer(
+          hostRoot,
+          projectRoot,
+          config.container.workdir,
+        );
+
+        globRequests.set(input.callID, {
+          container: containerName,
+          hostRoot,
+          containerRoot,
+          pattern,
+        });
+        log.info(
+          `[dind] Routed glob to ${containerName} (host=${hostRoot}, container=${containerRoot}, pattern=${pattern})`,
+        );
+        return;
+      }
+
+      if (input.tool === 'list') {
+        const listPath =
+          pickFirstStringArg(output.args, ['path', 'dir', 'directory']) ||
+          projectRoot;
+        if (!input.callID) {
+          log.debug('[dind] Skip list: missing callID');
+          return;
+        }
+
+        const sessionId = input.sessionID;
+        if (!sessionId) {
+          log.debug('[dind] Skip list: missing sessionID');
+          return;
+        }
+
+        const hostPath = resolveHostPathInProject(projectRoot, listPath);
+        if (!hostPath) {
+          log.debug(`[dind] Skip list: path outside project (${listPath})`);
+          return;
+        }
+
+        const scopeId = await resolveScopeId(
+          config,
+          ctx.client as OpencodeClient,
+          sessionId,
+          scopeCache,
+        );
+
+        let containerName = config.container.name;
+        if (!containerName) {
+          containerName =
+            (await getMappedContainer(config.stateFile, stateMutex, scopeId)) ||
+            undefined;
+        }
+
+        if (!containerName && config.container.autoCreate) {
+          containerName = buildContainerName(
+            config.container.namePrefix,
+            projectId,
+            scopeId,
+          );
+        }
+
+        if (!containerName) {
+          log.debug(`[dind] Skip list: no container for scope ${scopeId}`);
+          return;
+        }
+
+        const projectPath = resolveProjectPath(config, projectRoot);
+        const ensure = await ensureContainerRunning(
+          config,
+          {
+            name: containerName,
+            image: config.container.image,
+            workdir: config.container.workdir,
+            projectPath,
+            network: config.container.network,
+            mounts: config.container.mounts,
+            labels: buildContainerLabels(projectId, scopeId),
+          },
+          log,
+        );
+
+        if (!ensure.ok) {
+          log.warn(
+            `[dind] List: container unavailable ${containerName}: ${ensure.error}`,
+          );
+          if (config.routing.fallbackToHost) return;
+          return;
+        }
+
+        if (config.container.autoCreate) {
+          await setMappedContainer(
+            config.stateFile,
+            stateMutex,
+            scopeId,
+            containerName,
+          );
+          log.info(
+            `[dind] Session scope ${scopeId} mapped to container ${containerName}`,
+          );
+        }
+
+        const containerPath = mapHostPathToContainer(
+          hostPath,
+          projectRoot,
+          config.container.workdir,
+        );
+        listRequests.set(input.callID, {
+          container: containerName,
+          hostPath,
+          containerPath,
+        });
+        log.info(
+          `[dind] Routed list to ${containerName} (host=${hostPath}, container=${containerPath})`,
+        );
+        return;
+      }
+
+      if (input.tool === 'grep') {
+        const pattern = pickFirstStringArg(output.args, ['pattern']);
+        if (!pattern) {
+          log.debug('[dind] Skip grep: missing pattern');
+          return;
+        }
+        if (!input.callID) {
+          log.debug('[dind] Skip grep: missing callID');
+          return;
+        }
+
+        const sessionId = input.sessionID;
+        if (!sessionId) {
+          log.debug('[dind] Skip grep: missing sessionID');
+          return;
+        }
+
+        const searchPath =
+          pickFirstStringArg(output.args, ['path', 'dir', 'directory']) ||
+          projectRoot;
+        const hostRoot = resolveHostPathInProject(projectRoot, searchPath);
+        if (!hostRoot) {
+          log.debug(`[dind] Skip grep: path outside project (${searchPath})`);
+          return;
+        }
+
+        const scopeId = await resolveScopeId(
+          config,
+          ctx.client as OpencodeClient,
+          sessionId,
+          scopeCache,
+        );
+
+        let containerName = config.container.name;
+        if (!containerName) {
+          containerName =
+            (await getMappedContainer(config.stateFile, stateMutex, scopeId)) ||
+            undefined;
+        }
+
+        if (!containerName && config.container.autoCreate) {
+          containerName = buildContainerName(
+            config.container.namePrefix,
+            projectId,
+            scopeId,
+          );
+        }
+
+        if (!containerName) {
+          log.debug(`[dind] Skip grep: no container for scope ${scopeId}`);
+          return;
+        }
+
+        const projectPath = resolveProjectPath(config, projectRoot);
+        const ensure = await ensureContainerRunning(
+          config,
+          {
+            name: containerName,
+            image: config.container.image,
+            workdir: config.container.workdir,
+            projectPath,
+            network: config.container.network,
+            mounts: config.container.mounts,
+            labels: buildContainerLabels(projectId, scopeId),
+          },
+          log,
+        );
+
+        if (!ensure.ok) {
+          log.warn(
+            `[dind] Grep: container unavailable ${containerName}: ${ensure.error}`,
+          );
+          if (config.routing.fallbackToHost) return;
+          return;
+        }
+
+        if (config.container.autoCreate) {
+          await setMappedContainer(
+            config.stateFile,
+            stateMutex,
+            scopeId,
+            containerName,
+          );
+          log.info(
+            `[dind] Session scope ${scopeId} mapped to container ${containerName}`,
+          );
+        }
+
+        const containerRoot = mapHostPathToContainer(
+          hostRoot,
+          projectRoot,
+          config.container.workdir,
+        );
+        const include = pickFirstStringArg(output.args, ['include', 'glob']);
+
+        grepRequests.set(input.callID, {
+          container: containerName,
+          hostRoot,
+          containerRoot,
+          pattern,
+          include,
+        });
+        log.info(
+          `[dind] Routed grep to ${containerName} (host=${hostRoot}, container=${containerRoot}, pattern=${pattern})`,
+        );
+        return;
+      }
+
+      if (!output.args?.command) {
+        log.debug(`[dind] Skip: no command for tool ${input.tool}`);
+        return;
+      }
+      if (!shouldInterceptCommand(output.args.command, config)) {
+        log.debug(
+          `[dind] Skip: command bypassed (${formatCommandForLog(output.args.command)})`,
+        );
+        return;
+      }
 
       const sessionId = input.sessionID;
-      if (!sessionId) return;
+      if (!sessionId) {
+        log.debug('[dind] Skip: missing sessionID');
+        return;
+      }
 
       const scopeId = await resolveScopeId(
         config,
@@ -1060,23 +2009,30 @@ export const DindRouterPlugin: Plugin = async (ctx) => {
         );
       }
 
-      console.log('DND Container Name', containerName);
-      if (!containerName) return;
+      if (!containerName) {
+        log.debug(`[dind] Skip: no container for scope ${scopeId}`);
+        return;
+      }
 
       const projectPath = resolveProjectPath(config, projectRoot);
-      const ensure = await ensureContainerRunning(config, {
-        name: containerName,
-        image: config.container.image,
-        workdir: config.container.workdir,
-        projectPath,
-        network: config.container.network,
-        mounts: config.container.mounts,
-        labels: buildContainerLabels(projectId, scopeId),
-      });
-
-      console.log('DND Ensure', ensure);
+      const ensure = await ensureContainerRunning(
+        config,
+        {
+          name: containerName,
+          image: config.container.image,
+          workdir: config.container.workdir,
+          projectPath,
+          network: config.container.network,
+          mounts: config.container.mounts,
+          labels: buildContainerLabels(projectId, scopeId),
+        },
+        log,
+      );
 
       if (!ensure.ok) {
+        log.warn(
+          `[dind] Command: container unavailable ${containerName}: ${ensure.error}`,
+        );
         if (config.routing.fallbackToHost) return;
         output.args.command = buildFailureCommand(
           ensure.error || `Container ${containerName} is unavailable`,
@@ -1091,11 +2047,18 @@ export const DindRouterPlugin: Plugin = async (ctx) => {
           scopeId,
           containerName,
         );
+        log.info(
+          `[dind] Session scope ${scopeId} mapped to container ${containerName}`,
+        );
       }
 
       const originalCommand = output.args.command;
+      const hostCwd =
+        typeof output.args.cwd === 'string' && output.args.cwd.length > 0
+          ? output.args.cwd
+          : projectRoot;
       const mappedWorkdir = mapHostPathToContainer(
-        output.args.cwd || projectRoot,
+        hostCwd,
         projectRoot,
         config.container.workdir,
       );
@@ -1103,6 +2066,10 @@ export const DindRouterPlugin: Plugin = async (ctx) => {
         output.args.env && typeof output.args.env === 'object'
           ? output.args.env
           : undefined;
+
+      log.info(
+        `[dind] Routed command to ${containerName} (worktree=${hostCwd}, workdir=${mappedWorkdir}): ${formatCommandForLog(originalCommand)}`,
+      );
 
       output.args.command = buildDockerExecCommand({
         dockerBinary: config.dockerBinary,
@@ -1114,6 +2081,215 @@ export const DindRouterPlugin: Plugin = async (ctx) => {
           ...(envOverrides || {}),
         },
       });
+    },
+
+    'tool.execute.after': async (
+      input: { tool: string; callID: string },
+      output: { title: string; output: string; metadata: unknown },
+    ) => {
+      if (input.tool === 'read') {
+        const request = readRequests.get(input.callID);
+        if (!request) {
+          log.debug(
+            `[dind] Read after: no pending request for callID ${input.callID}`,
+          );
+          return;
+        }
+
+        readRequests.delete(input.callID);
+
+        const result = await runDockerExec(config, {
+          container: request.container,
+          command: buildReadCommand(request.containerPath),
+        });
+
+        if (!result.ok) {
+          log.warn(
+            `[dind] Read failed in ${request.container} (host=${request.hostPath}, container=${request.containerPath}): ${result.stderr || result.stdout}`,
+          );
+          return;
+        }
+
+        output.output = result.stdout;
+        return;
+      }
+
+      if (input.tool === 'write') {
+        const request = writeRequests.get(input.callID);
+        if (!request) {
+          log.debug(
+            `[dind] Write after: no pending request for callID ${input.callID}`,
+          );
+          return;
+        }
+
+        writeRequests.delete(input.callID);
+
+        const sync = await syncFileToContainer(config, request);
+        if (!sync.ok) {
+          log.warn(
+            `[dind] Write sync failed in ${request.container} (host=${request.hostPath}, container=${request.containerPath}): ${sync.error}`,
+          );
+          return;
+        }
+
+        log.info(
+          `[dind] Synced write to ${request.container} (host=${request.hostPath}, container=${request.containerPath})`,
+        );
+        return;
+      }
+
+      if (input.tool === 'edit') {
+        const request = editRequests.get(input.callID);
+        if (!request) {
+          log.debug(
+            `[dind] Edit after: no pending request for callID ${input.callID}`,
+          );
+          return;
+        }
+
+        editRequests.delete(input.callID);
+
+        const sync = await syncFileToContainer(config, request);
+        if (!sync.ok) {
+          log.warn(
+            `[dind] Edit sync failed in ${request.container} (host=${request.hostPath}, container=${request.containerPath}): ${sync.error}`,
+          );
+          return;
+        }
+
+        log.info(
+          `[dind] Synced edit to ${request.container} (host=${request.hostPath}, container=${request.containerPath})`,
+        );
+        return;
+      }
+
+      if (input.tool === 'list') {
+        const request = listRequests.get(input.callID);
+        if (!request) {
+          log.debug(
+            `[dind] List after: no pending request for callID ${input.callID}`,
+          );
+          return;
+        }
+
+        listRequests.delete(input.callID);
+
+        const result = await runDockerExec(config, {
+          container: request.container,
+          command: buildListCommand(request.containerPath),
+        });
+
+        if (!result.ok) {
+          log.warn(
+            `[dind] List failed in ${request.container} (host=${request.hostPath}, container=${request.containerPath}): ${result.stderr || result.stdout}`,
+          );
+          return;
+        }
+
+        output.output = result.stdout;
+        return;
+      }
+
+      if (input.tool === 'grep') {
+        const request = grepRequests.get(input.callID);
+        if (!request) {
+          log.debug(
+            `[dind] Grep after: no pending request for callID ${input.callID}`,
+          );
+          return;
+        }
+
+        grepRequests.delete(input.callID);
+
+        const command = buildGrepCommand(request.pattern, request.include);
+        if (!command) {
+          log.debug('[dind] Grep after: missing command');
+          return;
+        }
+
+        const result = await runDockerExec(config, {
+          container: request.container,
+          command,
+          workdir: request.containerRoot,
+        });
+
+        if (!result.ok && result.exitCode !== 1) {
+          log.warn(
+            `[dind] Grep failed in ${request.container} (root=${request.containerRoot}, pattern=${request.pattern}): ${result.stderr || result.stdout}`,
+          );
+          return;
+        }
+
+        if (result.exitCode === 1 || !result.stdout) {
+          output.output = '';
+          return;
+        }
+
+        const mappedLines = result.stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [filePath, lineNum, ...rest] = line.split('|');
+            if (!filePath || !lineNum) return line;
+            const mappedPath = path.isAbsolute(filePath)
+              ? mapContainerPathToHost(
+                  filePath,
+                  request.hostRoot,
+                  request.containerRoot,
+                )
+              : path.join(request.hostRoot, filePath);
+            const tail = rest.join('|');
+            return [mappedPath, lineNum, tail].filter(Boolean).join('|');
+          });
+
+        output.output = mappedLines.join('\n');
+        return;
+      }
+
+      if (input.tool === 'glob') {
+        const request = globRequests.get(input.callID);
+        if (!request) {
+          log.debug(
+            `[dind] Glob after: no pending request for callID ${input.callID}`,
+          );
+          return;
+        }
+
+        globRequests.delete(input.callID);
+
+        const result = await runDockerExec(config, {
+          container: request.container,
+          command: buildGlobCommand(request.pattern),
+          workdir: request.containerRoot,
+        });
+
+        if (!result.ok) {
+          log.warn(
+            `[dind] Glob failed in ${request.container} (root=${request.containerRoot}, pattern=${request.pattern}): ${result.stderr || result.stdout}`,
+          );
+          return;
+        }
+
+        const lines = result.stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .slice(0, 100);
+
+        const mapped = lines.map((line) =>
+          path.isAbsolute(line)
+            ? mapContainerPathToHost(
+                line,
+                request.hostRoot,
+                request.containerRoot,
+              )
+            : path.join(request.hostRoot, line),
+        );
+
+        output.output = mapped.join('\n');
+      }
     },
   };
 };

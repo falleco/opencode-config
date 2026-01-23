@@ -11,11 +11,16 @@ services:
       - "${OPENCODE_PORT:-4096}:4096"
       - "1455:1455"
     depends_on:
-      - opencode-dind
+      opencode-dind:
+        condition: service_healthy
+      opencode-worker-build:
+        condition: service_completed_successfully
     volumes:
       # Map the opencode folder to the container
       - ./opencode:/home/opencode/.config/opencode
+      # Project roots (UI expects .config/opencode/projects)
       - /Users/falleco/projects/ai:/home/opencode/projects
+      - /Users/falleco/projects/ai:/home/opencode/.config/opencode/projects
       # Map OpenCode auth directory for persistence
       - ./.state:/home/opencode/.local/share/opencode
       # Docker TLS certs from dind
@@ -36,6 +41,9 @@ services:
     image: docker:27-dind
     container_name: opencode-dind
     privileged: true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
       - DOCKER_TLS_CERTDIR=/certs
     volumes:
@@ -47,6 +55,36 @@ services:
         aliases:
           - docker
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  opencode-worker-build:
+    image: docker:27-cli
+    container_name: opencode-worker-build
+    depends_on:
+      opencode-dind:
+        condition: service_healthy
+    environment:
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
+    volumes:
+      - ./:/workspace
+      - opencode-dind-certs:/certs:ro
+    working_dir: /workspace
+    command:
+      [
+        "sh",
+        "-lc",
+        "docker build -f /workspace/docker/Dockerfile.worker -t opencode-worker:latest /workspace"
+      ]
+    networks:
+      - opencode-net
+    restart: "no"
 
 volumes:
   opencode-auth:

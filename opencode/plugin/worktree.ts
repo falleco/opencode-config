@@ -133,6 +133,8 @@ const branchNameSchema = z
  * Config file: .opencode/worktree.jsonc
  */
 const worktreeConfigSchema = z.object({
+  /** Base directory for worktrees (absolute or relative to repo root) */
+  baseDir: z.string().optional(),
   sync: z
     .object({
       /** Files to copy from main worktree (relative paths only) */
@@ -154,6 +156,24 @@ const worktreeConfigSchema = z.object({
 });
 
 type WorktreeConfig = z.infer<typeof worktreeConfigSchema>;
+
+/**
+ * Format structured worktree log lines for consistent scanning.
+ */
+export function formatWorktreeLog(
+  action: string,
+  details?: Record<string, string | undefined>,
+): string {
+  if (!details) return `[worktree] ${action}`;
+
+  const suffix = Object.entries(details)
+    .filter(([, value]) => typeof value === 'string' && value.length > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join(' ');
+
+  return suffix ? `[worktree] ${action} ${suffix}` : `[worktree] ${action}`;
+}
 
 // =============================================================================
 // ERROR TYPES
@@ -518,12 +538,22 @@ async function branchExists(cwd: string, branch: string): Promise<boolean> {
   return result.ok;
 }
 
+function resolveWorktreeBaseDir(
+  repoRoot: string,
+  config: WorktreeConfig,
+): string | undefined {
+  const candidate = process.env.OPENCODE_WORKTREE_BASE || config.baseDir;
+  if (!candidate) return undefined;
+  return path.isAbsolute(candidate) ? candidate : path.join(repoRoot, candidate);
+}
+
 async function createWorktree(
   repoRoot: string,
   branch: string,
   baseBranch?: string,
+  baseDir?: string,
 ): Promise<Result<string, string>> {
-  const worktreePath = await getWorktreePath(repoRoot, branch);
+  const worktreePath = await getWorktreePath(repoRoot, branch, baseDir);
 
   // Ensure parent directory exists
   await mkdir(path.dirname(worktreePath), { recursive: true });
@@ -718,6 +748,10 @@ async function loadWorktreeConfig(
   // Worktree plugin configuration
   // Documentation: https://github.com/kdcokenny/ocx
 
+  // Base directory for worktrees (absolute or relative to repo root)
+  // Example: ".opencode/worktrees"
+  "baseDir": "",
+
   "sync": {
     // Files to copy from main worktree to new worktrees
     // Example: [".env", ".env.local", "dev.sqlite"]
@@ -823,20 +857,40 @@ export const WorktreePlugin: Plugin = async (ctx) => {
             }
           }
 
+          const worktreeConfig = await loadWorktreeConfig(directory, log);
+          const worktreeBaseDir = resolveWorktreeBaseDir(
+            directory,
+            worktreeConfig,
+          );
+
+          log.info(
+            formatWorktreeLog('create.start', {
+              branch: args.branch,
+              base: args.baseBranch ?? 'HEAD',
+              baseDir: worktreeBaseDir ?? 'default',
+            }),
+          );
+
           // Create worktree
           const result = await createWorktree(
             directory,
             args.branch,
             args.baseBranch,
+            worktreeBaseDir,
           );
           if (!result.ok) {
             return `Failed to create worktree: ${result.error}`;
           }
 
           const worktreePath = result.value;
+          log.info(
+            formatWorktreeLog('create.done', {
+              branch: args.branch,
+              path: worktreePath,
+            }),
+          );
 
           // Sync files from main worktree
-          const worktreeConfig = await loadWorktreeConfig(directory, log);
           const mainWorktreePath = directory; // The repo root is the main worktree
 
           // Copy files
@@ -885,6 +939,13 @@ export const WorktreePlugin: Plugin = async (ctx) => {
               },
             );
 
+          log.info(
+            formatWorktreeLog('session.forked', {
+              branch: args.branch,
+              path: worktreePath,
+              session: forkedSession.id,
+            }),
+          );
           log.debug(
             `Forked session ${forkedSession.id}, plan: ${planCopied}, delegations: ${delegationsCopied}`,
           );
@@ -929,6 +990,14 @@ export const WorktreePlugin: Plugin = async (ctx) => {
             return 'No worktree associated with this session';
           }
 
+          log.info(
+            formatWorktreeLog('delete.requested', {
+              branch: session.branch,
+              path: session.path,
+              session: toolCtx?.sessionID ?? 'unknown',
+            }),
+          );
+
           // Set pending delete for session.idle (atomic operation)
           setPendingDelete(
             database,
@@ -948,6 +1017,12 @@ export const WorktreePlugin: Plugin = async (ctx) => {
       const pendingDelete = getPendingDelete(database);
       if (pendingDelete) {
         const { path: worktreePath, branch } = pendingDelete;
+        log.info(
+          formatWorktreeLog('delete.start', {
+            branch,
+            path: worktreePath,
+          }),
+        );
 
         // Run preDelete hooks before cleanup
         const config = await loadWorktreeConfig(directory, log);
@@ -977,6 +1052,13 @@ export const WorktreePlugin: Plugin = async (ctx) => {
         if (!removeResult.ok) {
           log.warn(
             `[worktree] Failed to remove worktree: ${removeResult.error}`,
+          );
+        } else {
+          log.info(
+            formatWorktreeLog('delete.done', {
+              branch,
+              path: worktreePath,
+            }),
           );
         }
 

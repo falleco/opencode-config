@@ -77,11 +77,19 @@ const pendingDeleteSchema = z.object({
 export async function getWorktreePath(
   projectRoot: string,
   branch: string,
+  baseDir?: string,
 ): Promise<string> {
   if (!branch || typeof branch !== 'string') {
     throw new Error('branch is required');
   }
   const projectId = await getProjectId(projectRoot);
+  if (typeof baseDir === 'string' && baseDir.length > 0) {
+    const resolvedBase = path.isAbsolute(baseDir)
+      ? baseDir
+      : path.resolve(projectRoot, baseDir);
+    return path.join(resolvedBase, projectId, branch);
+  }
+
   return path.join(
     os.homedir(),
     '.local',

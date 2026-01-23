@@ -2,7 +2,7 @@
 set -e
 
 # Build the opencode web command with hostname
-CMD_ARGS=("opencode" "web" "--hostname=${OPENCODE_WEB_HOST:-0.0.0.0}")
+CMD_ARGS=("opencode" "--log-level" "DEBUG" "web" "--hostname=${OPENCODE_WEB_HOST:-0.0.0.0}")
 
 # Add CORS flags if OPENCODE_WEB_CORS is set
 if [ -n "$OPENCODE_WEB_CORS" ]; then
