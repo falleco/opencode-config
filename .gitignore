@@ -15,3 +15,5 @@ tsconfig.tsbuildinfo
 # State
 .state/*
 !.state/.gitkeep
+
+.env

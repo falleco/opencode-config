@@ -22,7 +22,8 @@ RUN apk add --no-cache \
     bash \
     git \
     ripgrep \
-    docker-cli
+    docker-cli \
+    python3
 
 # Detect architecture for cross-platform support (for GitHub CLI)
 RUN ARCH=$(uname -m) \
@@ -88,7 +89,7 @@ RUN mkdir -p /home/opencode/.config/opencode \
 COPY --chown=opencode:opencode . /home/opencode/
 
 # Copy and make the start script executable
-COPY --chown=opencode:opencode docker/scripts/start-opencode.sh /home/opencode/start-opencode.sh
+COPY --chown=opencode:opencode scripts/start-opencode.sh /home/opencode/start-opencode.sh
 RUN chmod +x /home/opencode/start-opencode.sh
 
 # Install Bun for the opencode user

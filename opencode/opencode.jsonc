@@ -101,9 +101,7 @@
       "command": ["uvx", "mcp-server-fetch"]
     }
   },
-
-  "plugin": ["opencode-beads"],
-
+  
   /*********************************
    ******** Agents Override ********
    *********************************/
