@@ -1,22 +1,19 @@
 services:
+  #####################
+  # OpenCode Web Mode #
+  #####################
   opencode:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: opencode-web
-    # Load environment variables from root .env file
     env_file:
       - .env
     volumes:
-      # Map the opencode folder to the container
       - ./opencode:/home/opencode/.config/opencode
-      # Project roots (UI expects .config/opencode/projects)
       - ${OPENCODE_PROJECTS_DIR:-~/projects/ai}:/home/opencode/projects
-      # Map OpenCode auth directory for persistence
       - ./.state:/home/opencode/.local/share/opencode
-      # Docker client config (proxy defaults for dind containers)
       - ./docker-config:/home/opencode/.docker:ro
-      # Docker TLS certs from dind
       - opencode-dind-certs:/certs:ro
     environment:
       - NODE_ENV=${NODE_ENV:-production}
@@ -26,11 +23,9 @@ services:
       - HTTP_PROXY=http://egress-proxy:3128
       - HTTPS_PROXY=http://egress-proxy:3128
       - NO_PROXY=localhost,127.0.0.1,::1,egress-proxy,docker
-      # Optional: enable Docker-in-Docker by setting in .env and starting the profile
       - DOCKER_HOST=tcp://docker:2376
       - DOCKER_TLS_VERIFY=1
       - DOCKER_CERT_PATH=/certs/client
-      # - DOCKER_HOST=unix:///var/run/docker.sock
       # - OPENCODE_VERSION=${OPENCODE_VERSION:-1.1.34}
     networks:
       - opencode-internal
@@ -38,6 +33,9 @@ services:
       - egress-proxy
     restart: unless-stopped
 
+  ################
+  # Egress Proxy #
+  ################
   egress-proxy:
     build:
       context: ./egress
@@ -62,6 +60,9 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
 
+  #####################
+  #   Ingress Proxy   #
+  #####################
   ingress-proxy:
     image: nginx:alpine
     container_name: opencode-ingress-proxy
@@ -89,6 +90,9 @@ services:
       - opencode
     restart: unless-stopped
 
+  ########################
+  #   Docker-in-Docker   #
+  ########################
   docker-dind:
     image: docker:27-dind
     container_name: opencode-dind
@@ -112,6 +116,9 @@ services:
       - /tmp
     restart: unless-stopped
 
+  ########################
+  #   Docker-in-Docker   #
+  ########################
   dind-proxy:
     image: alpine/socat
     container_name: opencode-dind-proxy
@@ -126,11 +133,18 @@ services:
       - TCP:egress-proxy:3128
     restart: unless-stopped
 
+
+###############
+#   Volumes   #
+###############
 volumes:
   opencode-auth:
   opencode-dind-data:
   opencode-dind-certs:
 
+################
+#   Networks   #
+################
 networks:
   opencode-internal:
     internal: true

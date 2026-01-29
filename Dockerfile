@@ -98,12 +98,11 @@ RUN chmod +x /home/opencode/start-opencode.sh
 RUN curl -fsSL https://bun.sh/install | bash
 
 # Install OpenCode AI (Native Binary Method
-# https://opencode.ai/docs/
+# https://opencode.ai/docs/ we download it and run manually so
+# we can define the install version
 RUN wget https://opencode.ai/install -O opencode-install.sh \
     && bash opencode-install.sh ${OPENCODE_VERSION:+--version $OPENCODE_VERSION} \
     && rm opencode-install.sh
-
-# RUN curl -fsSL https://opencode.ai/install | bash
 
 # Add opencode and bun bin directories to PATH
 ENV PATH="/home/opencode/.opencode/bin:/home/opencode/.bun/bin:${PATH}"
