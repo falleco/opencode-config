@@ -8,6 +8,7 @@
 ##############################################################
 .chatgpt.com
 .openai.com
+.anthropic.com
 .alpinelinux.org
 .anaconda.com
 .apache.org
@@ -57,7 +58,6 @@
 .packagecloud.io
 .packagist.org
 .pkg.go.dev
-.ppa.launchpad.net
 .pub.dev
 .pypa.io
 .pypi.org
