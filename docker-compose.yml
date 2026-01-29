@@ -11,7 +11,7 @@ services:
       # Map the opencode folder to the container
       - ./opencode:/home/opencode/.config/opencode
       # Project roots (UI expects .config/opencode/projects)
-      - /Users/falleco/projects/ai:/home/opencode/projects
+      - ${OPENCODE_PROJECTS_DIR:-~/projects/ai}:/home/opencode/projects
       # Map OpenCode auth directory for persistence
       - ./.state:/home/opencode/.local/share/opencode
       # Docker client config (proxy defaults for dind containers)
@@ -108,7 +108,7 @@ services:
     volumes:
       - opencode-dind-data:/var/lib/docker
       - opencode-dind-certs:/certs
-      - /Users/falleco/projects/ai:/home/opencode/projects
+      - ${OPENCODE_PROJECTS_DIR:-~/projects/ai}:/home/opencode/projects
       - /tmp
     restart: unless-stopped
 
