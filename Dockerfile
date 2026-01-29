@@ -23,6 +23,7 @@ RUN apk add --no-cache \
     git \
     ripgrep \
     docker-cli \
+    docker-cli-compose \
     python3
 
 # Detect architecture for cross-platform support (for GitHub CLI)

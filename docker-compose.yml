@@ -4,32 +4,78 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: opencode-web
+    ports:
+      - "4096:4096"
+      - "1455:1455"
+      - "3000:3000"
     # Load environment variables from root .env file
     env_file:
       - .env
-    ports:
-      - "${OPENCODE_PORT:-4096}:4096"
-      - "1455:1455"
     volumes:
       # Map the opencode folder to the container
       - ./opencode:/home/opencode/.config/opencode
       # # Project roots (UI expects .config/opencode/projects)
-      # - /Users/falleco/projects/ai:/home/opencode/projects
+      - /Users/falleco/projects/ai:/home/opencode/projects
       # - /Users/falleco/projects/ai:/home/opencode/.config/opencode/projects
       # Map OpenCode auth directory for persistence
       - ./.state:/home/opencode/.local/share/opencode
+      # Docker client config (proxy defaults for dind containers)
+      - ./docker-config:/home/opencode/.docker:ro
+      # Docker TLS certs from dind
+      - opencode-dind-certs:/certs:ro
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - OPENCODE_CONFIG=${OPENCODE_CONFIG:-/home/opencode/.config/opencode/opencode.jsonc}
       - OPENCODE_CONFIG_DIR=${OPENCODE_CONFIG_DIR:-/home/opencode/.config/opencode}
       - OPENCODE_WEB_HOST=${OPENCODE_WEB_HOST:-0.0.0.0}
+      # Optional: enable Docker-in-Docker by setting in .env and starting the profile
+      - DOCKER_HOST=tcp://docker:2376
+      # - DOCKER_HOST=unix:///var/run/docker.sock
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
       # - OPENCODE_VERSION=${OPENCODE_VERSION:-1.1.34}
     networks:
-      - opencode-net
+      - opencode-network
     restart: unless-stopped
+    depends_on:
+      docker-dind:
+        condition: service_healthy
+
+  docker-dind:
+    image: docker:27-dind
+    container_name: opencode-dind
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    # dns:
+    #   - 192.168.70.23
+    #   # - 192.168.70.24
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    networks:
+      opencode-network:
+        aliases:
+          - docker
+    volumes:
+      - opencode-dind-data:/var/lib/docker
+      - opencode-dind-certs:/certs
+      # - ./docker-dind/daemon.json:/etc/docker/daemon.json:ro
+      - /Users/falleco/projects/ai:/home/opencode/projects
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   opencode-auth:
+  opencode-dind-data:
+  opencode-dind-certs:
 
 networks:
-  opencode-net:
+  opencode-network:
