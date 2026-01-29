@@ -24,7 +24,8 @@ RUN apk add --no-cache \
     ripgrep \
     docker-cli \
     docker-cli-compose \
-    python3
+    python3 \
+    socat
 
 # Detect architecture for cross-platform support (for GitHub CLI)
 RUN ARCH=$(uname -m) \

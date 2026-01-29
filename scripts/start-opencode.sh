@@ -1,6 +1,22 @@
 #!/bin/bash
 set -e
 
+# Optional: forward localhost ports to the docker-dind container (e.g., 3000)
+if [ -n "$OPENCODE_DIND_FORWARD_PORTS" ]; then
+    if command -v socat >/dev/null 2>&1; then
+        IFS=',' read -ra FORWARD_PORTS <<< "$OPENCODE_DIND_FORWARD_PORTS"
+        for port in "${FORWARD_PORTS[@]}"; do
+            port=$(echo "$port" | xargs)
+            if [ -n "$port" ]; then
+                echo "Forwarding localhost:${port} -> docker:${port}"
+                socat TCP-LISTEN:${port},fork,reuseaddr TCP:docker:${port} >/tmp/socat-${port}.log 2>&1 &
+            fi
+        done
+    else
+        echo "socat not installed; skipping localhost port forwarding"
+    fi
+fi
+
 # Build the opencode web command with hostname
 CMD_ARGS=("opencode" "--log-level" "DEBUG" "web" "--hostname=${OPENCODE_WEB_HOST:-0.0.0.0}")
 

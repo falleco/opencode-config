@@ -7,7 +7,6 @@ services:
     ports:
       - "4096:4096"
       - "1455:1455"
-      - "3000:3000"
     # Load environment variables from root .env file
     env_file:
       - .env
@@ -44,15 +43,24 @@ services:
   docker-dind:
     image: docker:27-dind
     container_name: opencode-dind
+    ports:
+      - "3000:3000"
+    command:
+      - "--host=tcp://0.0.0.0:2375"
+      - "--host=unix:///var/run/docker.sock"
+      - "--iptables=true"
+      - "--ip-masq=true"
+      - "--dns=1.1.1.1"
+      - "--dns=8.8.8.8"
+      - "--mtu=${DIND_MTU:-1450}"
     dns:
       - 1.1.1.1
       - 8.8.8.8
-    # dns:
-    #   - 192.168.70.23
-    #   # - 192.168.70.24
     privileged: true
     environment:
       - DOCKER_TLS_CERTDIR=/certs
+      - DOCKER_DRIVER=overlay2
+      - DIND_MTU=${DIND_MTU:-1450}
     networks:
       opencode-network:
         aliases:
@@ -60,7 +68,6 @@ services:
     volumes:
       - opencode-dind-data:/var/lib/docker
       - opencode-dind-certs:/certs
-      # - ./docker-dind/daemon.json:/etc/docker/daemon.json:ro
       - /Users/falleco/projects/ai:/home/opencode/projects
     tmpfs:
       - /tmp
