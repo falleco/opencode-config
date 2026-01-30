@@ -24,6 +24,7 @@ RUN apk add --no-cache \
     ripgrep \
     docker-cli \
     docker-cli-compose \
+    docker-cli-buildx \
     python3 \
     socat
 
@@ -49,7 +50,7 @@ RUN GH_VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | 
 
 # Install Node.js via Alpine's package manager
 # Enable community repository and install Node.js (will be v22 or latest available)
-RUN apk add --no-cache nodejs npm \
+RUN apk add --no-cache nodejs npm docker-cli-buildx \
     && node --version \
     && npm --version
 
